@@ -1,14 +1,17 @@
 {
   "name": "Languway French",
   "short_name": "Languway FR",
-  "description": "Learn French from Pre-A1 to C2 — 30 levels, AI tutor, smart language support",
+  "description": "Apprenez le français du niveau Pré-A1 jusqu'au C2 — 30 niveaux",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#FAFAF8",
-  "theme_color": "#C8102E",
-  "orientation": "portrait",
+  "theme_color": "#B91C1C",
+  "orientation": "portrait-primary",
+  "lang": "fr",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
-  ]
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "categories": ["education", "lifestyle"],
+  "screenshots": []
 }
