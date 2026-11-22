@@ -1,1197 +1,1295 @@
 /* ================================================================
-   LANGUWAY FRENCH — MAIN APP LOGIC
-   ================================================================ */
+   LANGUWAY FRENCH — app.js v6
+   Main application logic
+================================================================ */
 
-// ── STATE ─────────────────────────────────────────────────────────
-let curPage = 'home';
-let lessonState = { lvId:null, step:0, data:null };
-let plState = { step:0, scores:{}, startTime:null };
-let sitState = { id:null };
-let flashState = { idx:0, side:'front', cards:[] };
-let aiHistory = [];
-let tDir = 'fr-en';
-let darkMode = false;
+// ── Utilities ──────────────────────────────────────────────────
+function esc(s){ return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function $(id){ return document.getElementById(id); }
+function openM(id){ const m=$(id); if(m) m.style.display='flex'; }
+function closeM(id){ const m=$(id); if(m) m.style.display='none'; }
+function getSession(){ try{ return JSON.parse(localStorage.getItem('lw_session')||'null'); }catch{ return null; } }
+function saveSession(s){ localStorage.setItem('lw_session', JSON.stringify(s)); }
 
-// ── UTILITY ────────────────────────────────────────────────────────
-const $ = id => document.getElementById(id);
-function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function speak(txt, rate=1){
-  if(!window.speechSynthesis) return;
-  const u = new SpeechSynthesisUtterance(txt);
-  u.lang='fr-FR'; u.rate=rate; u.pitch=1;
-  speechSynthesis.cancel();
+function toast(msg, type='info'){
+  const t=document.createElement('div');
+  t.className=`toast toast-${type}`;
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.classList.add('show'),10);
+  setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),300); },3000);
+}
+
+function speak(text){
+  if(!text) return;
+  window.speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang='fr-FR'; u.rate=0.85; u.pitch=1;
+  const voices=speechSynthesis.getVoices();
+  const fr=voices.find(v=>v.lang.startsWith('fr'));
+  if(fr) u.voice=fr;
   speechSynthesis.speak(u);
 }
-function toast(msg, type='info'){
-  const el = document.createElement('div');
-  el.className = `toast toast-${type}`;
-  el.innerHTML = msg;
-  document.body.appendChild(el);
-  setTimeout(()=>el.classList.add('show'),10);
-  setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=>el.remove(),400); },3200);
-}
-function xpToast(xp){ toast(`+${xp} XP 🌟`,'xp'); }
 
-// ── NAV ────────────────────────────────────────────────────────────
-function nav(page){
-  const user = authGetCurrent();
-  if(!user && !['auth'].includes(page)){ showAuth(); return; }
-  curPage = page;
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  const el = $(page+'-page');
-  if(el) el.classList.add('active');
-  document.querySelectorAll('.bnav-btn,.sb-item').forEach(b=>{
-    b.classList.toggle('active', b.dataset.p===page);
+// ── Router ────────────────────────────────────────────────────
+const PAGES = ['home','progress','lesson-map','profile','settings'];
+let currentPage = 'home';
+let currentLesson = null;
+
+function goTo(page, data={}){
+  if(!getSession() && page !== 'home'){
+    openM('m-auth'); return;
+  }
+  currentPage = page;
+  PAGES.forEach(p => {
+    const el = $('page-'+p);
+    if(el) el.style.display = p===page ? 'block' : 'none';
   });
-  closeSB();
-  renderPage(page);
-  window.scrollTo(0,0);
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    n.classList.toggle('active', n.dataset.page===page);
+  });
+  if(page==='home') renderHome();
+  if(page==='progress') renderProgress();
+  if(page==='lesson-map') renderLessonMap(data);
+  if(page==='profile') renderProfile();
+  if(page==='settings') renderSettings();
 }
 
-function renderPage(p){
-  const fns = {
-    home: renderHome, path: renderPath, wordbook: renderWordbook,
-    training: renderTraining, situations: renderSits, progress: renderProgress,
-    settings: renderSettings, stories: renderStories, explore: renderExplore,
-    translator: ()=>openTranslator(), about: renderAbout, share: renderShare,
-  };
-  if(fns[p]) fns[p]();
-}
-
-// ── SIDEBAR ────────────────────────────────────────────────────────
-function openSB(){ $('sidebar')?.classList.add('open'); $('overlay')?.classList.add('show'); document.body.style.overflow='hidden'; }
-function closeSB(){ $('sidebar')?.classList.remove('open'); $('overlay')?.classList.remove('show'); document.body.style.overflow=''; }
-
-// ── MODALS ─────────────────────────────────────────────────────────
-function openM(id){ const m=$(id); if(m){ m.classList.add('open'); document.body.style.overflow='hidden'; } }
-function closeM(id){ const m=$(id); if(m){ m.classList.remove('open'); document.body.style.overflow=''; } }
-
-// ── AUTH PAGE ──────────────────────────────────────────────────────
-function showAuth(tab='login'){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  $('auth-page')?.classList.add('active');
-  switchAuthTab(tab);
-  curPage='auth';
-}
-function switchAuthTab(tab){
-  document.querySelectorAll('.auth-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
-  $('auth-login-form')?.style.setProperty('display', tab==='login'?'flex':'none');
-  $('auth-reg-form')?.style.setProperty('display', tab==='register'?'flex':'none');
-}
+// ── Auth ──────────────────────────────────────────────────────
 function doLogin(){
-  const email = $('li-email')?.value.trim();
-  const pass  = $('li-pass')?.value;
-  if(!email||!pass){ toast('Veuillez remplir tous les champs.','err'); return; }
-  const res = authLogin(email, pass);
-  if(!res.ok){ toast(res.msg,'err'); return; }
-  toast('Bon retour! 🎉','ok');
-  initApp();
+  const em=($('auth-email')?.value||'').trim();
+  const pw=$('auth-pass')?.value||'';
+  if(!em||!pw){ toast('Please fill all fields','err'); return; }
+  const users=JSON.parse(localStorage.getItem('lw_users')||'{}');
+  const u=users[em];
+  if(!u||u.password!==btoa(pw)){ toast('Wrong email or password','err'); return; }
+  const session={...u, email:em, loginAt:Date.now()};
+  saveSession(session);
+  closeM('m-auth');
+  goTo('home');
+  toast(`Bonjour, ${u.name}! 👋`,'ok');
 }
+
 function doRegister(){
-  const name  = $('rg-name')?.value.trim();
-  const email = $('rg-email')?.value.trim();
-  const pass  = $('rg-pass')?.value;
-  const goal  = $('rg-goal')?.value;
-  if(!name||!email||!pass){ toast('Veuillez remplir tous les champs.','err'); return; }
-  if(pass.length<6){ toast('Mot de passe: 6 caractères minimum.','err'); return; }
-  const res = authRegister(name, email, pass, goal);
-  if(!res.ok){ toast(res.msg,'err'); return; }
-  toast('Compte créé avec succès! Bienvenue 🎊','ok');
-  startPlacement();
+  const name=($('reg-name')?.value||'').trim();
+  const em=($('reg-email')?.value||'').trim();
+  const pw=$('reg-pass')?.value||'';
+  if(!name||!em||!pw){ toast('Fill all fields','err'); return; }
+  if(pw.length<6){ toast('Password min 6 chars','err'); return; }
+  const users=JSON.parse(localStorage.getItem('lw_users')||'{}');
+  if(users[em]){ toast('Email already registered','err'); return; }
+  const newUser={
+    name, password:btoa(pw),
+    level:'pre-a1', xp:0, streak:0, lastStudy:null,
+    completedLessons:[], lessonProgress:{},
+    wordbook:[], certificates:[],
+    settings:{ uiLang:'ar', notifications:true, dailyGoal:10, theme:'dark' },
+    joinedAt:Date.now()
+  };
+  users[em]=newUser;
+  localStorage.setItem('lw_users', JSON.stringify(users));
+  saveSession({...newUser, email:em});
+  closeM('m-auth');
+  goTo('home');
+  toast(`Welcome to Languway, ${name}! 🎉`,'ok');
 }
+
 function doLogout(){
-  if(confirm('Voulez-vous vraiment vous déconnecter?')){ authLogout(); }
+  localStorage.removeItem('lw_session');
+  goTo('home');
+  toast('Logged out','info');
 }
 
-// ── TIERS & XP ─────────────────────────────────────────────────────
-const TIERS=[
-  {min:0,   max:200,  name:'Débutant',    icon:'🌱', color:'#4F46E5'},
-  {min:200, max:600,  name:'Apprenti',    icon:'📚', color:'#1D4ED8'},
-  {min:600, max:1200, name:'Intermédiaire',icon:'⚡', color:'#0D9488'},
-  {min:1200,max:2500, name:'Avancé',      icon:'🔥', color:'#D97706'},
-  {min:2500,max:5000, name:'Expert',      icon:'💎', color:'#7C3AED'},
-  {min:5000,max:99999,name:'Maître',      icon:'👑', color:'#B91C1C'},
-];
-function getTier(xp){ return TIERS.find(t=>xp>=t.min&&xp<t.max)||TIERS[0]; }
-function updateChip(){
-  const user = authGetCurrent();
-  const el = $('lvl-chip');
-  if(el) el.textContent = user ? (user.completedLevels?.length||0)+' Niveaux' : '—';
+function switchAuthTab(tab){
+  $('tab-login')?.classList.toggle('active', tab==='login');
+  $('tab-register')?.classList.toggle('active', tab==='register');
+  $('form-login') && ($('form-login').style.display = tab==='login'?'flex':'none');
+  $('form-register') && ($('form-register').style.display = tab==='register'?'flex':'none');
 }
 
-// ── HOME ───────────────────────────────────────────────────────────
-function getGreet(){
-  const h=new Date().getHours();
-  if(h<6)  return 'Bonne nuit';
-  if(h<12) return 'Bonjour';
-  if(h<18) return 'Bon après-midi';
-  return 'Bonsoir';
-}
+// ── Home Page ─────────────────────────────────────────────────
 function renderHome(){
-  const el = $('home-page'); if(!el) return;
-  const user = authGetCurrent();
-  if(!user){ el.innerHTML=`<div class="auth-prompt"><div class="auth-prompt-ic">🇫🇷</div><h2>Bienvenue dans Languway French</h2><p>Connectez-vous pour accéder à tout le contenu.</p><div style="display:flex;gap:10px;margin-top:16px"><button class="btn btn-p" onclick="showAuth('login')">Se connecter</button><button class="btn btn-o" onclick="showAuth('register')">S\'inscrire</button></div></div>`; return; }
-  const tier = getTier(user.xp||0);
-  const done = user.completedLevels?.length||0;
-  const streak = user.streak||0;
-  const totalLessons = done * 6;
-  const nextPct = done<30 ? Math.round(((user.xp||0)-tier.min)/(tier.max-tier.min)*100) : 100;
-  const wod = WORD_OF_DAY[new Date().getDate()%WORD_OF_DAY.length];
+  const s=getSession();
 
-  el.innerHTML=`
-  <div class="hero">
-    <div class="hero-ornament">✦ ${getGreet()}, ${esc(user.name)} ✦</div>
-    <h1 class="hero-title">Continuez votre<br><em>voyage en français</em></h1>
-    <p class="hero-sub">Chaque leçon vous rapproche de la maîtrise.</p>
-    <div class="hero-divider"><span>AUJOURD'HUI</span></div>
-  </div>
+  // Stats bar
+  const stats=[
+    {label:'Lessons',val: s ? (s.completedLessons?.length||0) : 0},
+    {label:'XP',val: s ? (s.xp||0) : 0},
+    {label:'Streak',val: s ? (s.streak||0)+'d' : '0d'},
+    {label:'Level',val: s ? (s.level||'Pre-A1').toUpperCase() : '—'},
+  ];
+  const sb=$('home-stats');
+  if(sb) sb.innerHTML = stats.map(st=>`
+    <div class="stat-card">
+      <div class="stat-val">${esc(String(st.val))}</div>
+      <div class="stat-lbl">${esc(st.label)}</div>
+    </div>`).join('');
 
-  <div class="stats-strip">
-    <div class="stat-box"><div class="stat-v">${user.xp||0}</div><div class="stat-l">XP Total</div></div>
-    <div class="stat-box"><div class="stat-v">${done}</div><div class="stat-l">Niveaux</div></div>
-    <div class="stat-box"><div class="stat-v">${streak}🔥</div><div class="stat-l">Jours</div></div>
-    <div class="stat-box"><div class="stat-v">${totalLessons}</div><div class="stat-l">Leçons</div></div>
-  </div>
+  // Next lesson card
+  const nextLesson = s ? getNextLesson(s) : null;
+  const nl=$('home-next-lesson');
+  if(nl){
+    if(s && nextLesson){
+      nl.innerHTML=`
+      <div class="next-lesson-card" onclick="startLesson('${nextLesson.levelId}',${nextLesson.unitNum},${nextLesson.lessonNum})">
+        <div class="next-lesson-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2z"/></svg>
+          Prochaine leçon
+        </div>
+        <div class="next-lesson-title">${esc(nextLesson.title)}</div>
+        <div class="next-lesson-meta">
+          ${esc(nextLesson.levelId.toUpperCase())} · Unité ${nextLesson.unitNum} · Leçon ${nextLesson.lessonNum}
+          <span class="next-lesson-xp">+${nextLesson.xp} XP</span>
+        </div>
+        <div class="next-lesson-cta">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Commencer
+        </div>
+      </div>`;
+    } else {
+      nl.innerHTML=`<div class="next-lesson-card next-lesson-guest" onclick="openM('m-auth')">
+        <div class="next-lesson-label">Commencez votre voyage</div>
+        <div class="next-lesson-title">Bonjour! Leçon 1</div>
+        <div class="next-lesson-meta">Pre-A1 · Unité 1 · Leçon 1</div>
+        <div class="next-lesson-cta">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Inscrivez-vous gratuitement
+        </div>
+      </div>`;
+    }
+  }
 
-  <div class="card">
-    <div class="tier-row">
-      <span class="tier-ic">${tier.icon}</span>
-      <div class="tier-info">
-        <span class="tier-nm">${tier.name}</span>
-        <div class="tier-bar"><div class="tier-fill" style="width:${nextPct}%;background:${tier.color}"></div></div>
-      </div>
-      <span class="tier-xp">${user.xp||0} XP</span>
-    </div>
-  </div>
-
-  ${done===0?`<div class="card placement-card">
-    <div class="pl-ornament">📋 TEST DE PLACEMENT</div>
-    <div class="card-title">Découvrez votre niveau</div>
-    <p style="font-size:.84rem;color:var(--txt2);margin:8px 0 14px">Passez le test de placement pour commencer au bon niveau.</p>
-    <button class="btn btn-p" style="width:100%" onclick="startPlacement()">🎯 Commencer le test</button>
-  </div>`:''}
-
-  ${renderNextLessonCard()}
-
-  <div class="card">
-    <div class="card-lbl">🗺️ Votre parcours</div>
-    ${renderRoadmapMini()}
-    <button class="btn btn-o btn-sm" style="width:100%;margin-top:12px" onclick="nav('path')">Voir tout le parcours →</button>
-  </div>
-
-  <div class="card" style="border-left:3px solid #EAB308">
-    <div class="card-lbl">✨ Mot du jour</div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <div class="card-title">${esc(wod.fr)}</div>
-      <button class="btn-tts" onclick="speak('${esc(wod.fr)}')">🔊</button>
-    </div>
-    <div style="font-size:.8rem;color:var(--txt2);margin-bottom:4px">[${esc(wod.pron)}] · ${esc(wod.type)}</div>
-    <div style="font-size:.88rem;margin-bottom:6px">${esc(wod.eng)}</div>
-    <div style="font-size:.84rem;color:var(--cr);font-style:italic">"${esc(wod.ex)}"</div>
-    <div style="font-size:.76rem;color:var(--txt3);margin-top:6px">💡 ${esc(wod.note)}</div>
-  </div>
-
-  <div class="quick-grid">
-    <div class="quick-btn-card" onclick="nav('training')"><div class="qb-ic">🎯</div><div class="qb-nm">Entraînement</div><div class="qb-ds">Flashcards & Quiz</div></div>
-    <div class="quick-btn-card" onclick="nav('situations')"><div class="qb-ic">💬</div><div class="qb-nm">Situations</div><div class="qb-ds">Conversations réelles</div></div>
-    <div class="quick-btn-card" onclick="nav('stories')"><div class="qb-ic">📖</div><div class="qb-nm">Histoires</div><div class="qb-ds">Lecture guidée</div></div>
-    <div class="quick-btn-card" onclick="nav('explore')"><div class="qb-ic">🔍</div><div class="qb-nm">Explorer</div><div class="qb-ds">Grammaire & Culture</div></div>
-  </div>`;
+  // Learning path (levels)
+  renderLearningPath();
 }
 
-function renderNextLessonCard(){
-  const user = authGetCurrent(); if(!user) return '';
-  const done = user.completedLevels||[];
-  const next = LVS.find(l=>!done.includes(l.id));
-  if(!next) return `<div class="card nl-card"><div class="nl-row"><span style="font-size:1.6rem">🏆</span><div><div style="font-weight:600">Félicitations!</div><div style="font-size:.82rem;color:var(--txt2)">Tous les niveaux complétés!</div></div></div></div>`;
-  const band = BANDS[next.band];
-  return `<div class="card nl-card" style="border-left:3px solid ${band.color}">
-    <div class="card-lbl">▶ Prochaine leçon</div>
-    <div class="nl-row">
-      <span style="font-size:1.6rem">${next.icon}</span>
-      <div style="flex:1">
-        <div style="font-weight:600">${esc(next.name)}</div>
-        <div style="font-size:.78rem;color:var(--txt2)">${esc(next.desc)}</div>
-        <div style="font-size:.72rem;margin-top:3px"><span style="background:${band.bg};color:${band.color};padding:2px 8px;border-radius:10px">${band.label}</span> <span style="color:var(--txt3)">+${next.xp} XP</span></div>
-      </div>
-      <button class="btn btn-p btn-sm" onclick="startLevel(${next.id})">▶</button>
-    </div>
-  </div>`;
+function getNextLesson(s){
+  const levels=['pre-a1','a1','a2','b1','b2','c1'];
+  for(const lv of levels){
+    for(let u=1;u<=10;u++){
+      for(let l=1;l<=5;l++){
+        const id=`${lv}-u${u}-l${l}`;
+        if(!(s.completedLessons||[]).includes(id)){
+          const content = typeof buildLessonContent==='function' ? buildLessonContent(lv,u,l) : {title:`Leçon ${l}`,xp:50};
+          return {levelId:lv,unitNum:u,lessonNum:l,...content};
+        }
+      }
+    }
+  }
+  return null;
 }
 
-function renderRoadmapMini(){
-  const user = authGetCurrent();
-  const done = user?.completedLevels||[];
-  return Object.entries(BANDS).map(([key,band])=>{
-    const total = LVS.filter(l=>l.band===key).length;
-    const comp  = LVS.filter(l=>l.band===key&&done.includes(l.id)).length;
-    const pct   = total ? Math.round(comp/total*100) : 0;
-    return `<div class="roadmap-row"><div class="rm-label" style="color:${band.color}">${band.label}</div><div class="rm-track"><div style="width:${pct}%;height:100%;background:${band.color};border-radius:4px;transition:width .6s"></div></div><div class="rm-pct">${pct}%</div></div>`;
+function renderLearningPath(){
+  const el=$('home-learning-path');
+  if(!el) return;
+  const s=getSession();
+  const levels=[
+    {id:'pre-a1',label:'Pré-A1',desc:'Alphabet & sons',img:'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=400&q=70',color:'#6C63FF'},
+    {id:'a1',label:'A1',desc:'Débutant',img:'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400&q=70',color:'#D62828'},
+    {id:'a2',label:'A2',desc:'Élémentaire',img:'https://images.unsplash.com/photo-1522093007474-d86e9bf7ba6f?w=400&q=70',color:'#F77F00'},
+    {id:'b1',label:'B1',desc:'Intermédiaire',img:'https://images.unsplash.com/photo-1543349689-9a4d426bee8e?w=400&q=70',color:'#2D9CDB'},
+    {id:'b2',label:'B2',desc:'Avancé',img:'https://images.unsplash.com/photo-1584810359583-96fc3448beaa?w=400&q=70',color:'#27AE60'},
+    {id:'c1',label:'C1',desc:'Maîtrise',img:'https://images.unsplash.com/photo-1565073182887-6bcefbe225b1?w=400&q=70',color:'#F2994A'},
+  ];
+  const totalPerLevel=50;
+  el.innerHTML=levels.map(lv=>{
+    const done=s?(s.completedLessons||[]).filter(id=>id.startsWith(lv.id+'-')).length:0;
+    const pct=Math.round(done/totalPerLevel*100);
+    const locked=!s;
+    return `
+    <div class="level-card ${locked&&lv.id!=='pre-a1'?'level-locked':''}" onclick="${locked?`openM('m-auth')`:`goTo('lesson-map',{levelId:'${lv.id}'})`}" style="--lv-color:${lv.color}">
+      <img src="${lv.img}" class="level-card-img" alt="${lv.label}" loading="lazy"/>
+      <div class="level-card-overlay"></div>
+      <div class="level-card-body">
+        <div class="level-card-badge">${lv.label}</div>
+        <div class="level-card-title">${esc(lv.desc)}</div>
+        <div class="level-card-progress">
+          <div class="level-card-bar"><div class="level-card-fill" style="width:${pct}%"></div></div>
+          <span>${done}/50</span>
+        </div>
+      </div>
+      ${locked&&lv.id!=='pre-a1'?'<div class="level-lock-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg></div>':''}
+    </div>`;
   }).join('');
 }
 
-// ── PATH ───────────────────────────────────────────────────────────
-let curBand = 'pre-a1';
-function renderPath(){
-  const el=$('path-page'); if(!el) return;
-  const user=authGetCurrent();
-  const done=user?.completedLevels||[];
-  el.innerHTML=`
-  <div class="page-header"><h2 class="page-title">🗺️ Mon Parcours</h2><p class="page-sub">Pre-A1 → C2 · 30 Niveaux</p></div>
-  <div class="band-tabs" id="band-tabs">
-    ${Object.entries(BANDS).map(([k,b])=>`<button class="band-tab${k===curBand?' active':''}" onclick="switchBand('${k}')" style="--bc:${b.color}">${b.label}</button>`).join('')}
-  </div>
-  <div id="band-body"></div>`;
-  renderBand(curBand);
-}
-function switchBand(b){ curBand=b; renderPath(); }
-function renderBand(band){
-  const el=$('band-body'); if(!el) return;
-  const user=authGetCurrent();
-  const done=user?.completedLevels||[];
-  const levels=LVS.filter(l=>l.band===band);
-  const b=BANDS[band];
-  el.innerHTML=`
-  <div class="band-info"><div style="font-size:.82rem;color:var(--txt2)">${esc(b.desc)}</div></div>
-  <div class="levels-grid">
-    ${levels.map(lv=>{
-      const isD=done.includes(lv.id);
-      const isN=!isD&&(lv.id===1||done.includes(lv.id-1));
-      return `<div class="level-card${isD?' done':isN?' next':''}">
-        <div class="lv-top">
-          <span class="lv-ic">${lv.icon}</span>
-          <span class="lv-code" style="color:${b.color}">${lv.code}</span>
-          ${isD?'<span class="lv-check">✓</span>':''}
-        </div>
-        <div class="lv-name">${esc(lv.name)}</div>
-        <div class="lv-desc">${esc(lv.desc)}</div>
-        <div class="lv-footer">
-          <span class="lv-xp">+${lv.xp} XP</span>
-          <button class="btn btn-sm ${isD?'btn-g':'btn-p'}" onclick="startLevel(${lv.id})">${isD?'🔁 Revoir':'▶ Commencer'}</button>
-        </div>
-      </div>`;
-    }).join('')}
-  </div>`;
-}
+// ── Lesson Map ───────────────────────────────────────────────
+function renderLessonMap(data={}){
+  const el=$('page-lesson-map');
+  if(!el) return;
+  const s=getSession();
+  const levelId=data.levelId||s?.level||'pre-a1';
 
-// ── LESSON ─────────────────────────────────────────────────────────
-function startLevel(id){
-  const data = getLesson(id);
-  if(!data){ toast('Leçon en cours de développement.','info'); return; }
-  lessonState = { lvId:id, step:0, data };
-  openM('m-lesson');
-  renderLesStep();
-}
-function renderLesStep(){
-  const { data, step } = lessonState;
-  const box = $('m-lesson')?.querySelector('.modal-box');
-  if(!box) return;
-  const s = data.steps[step];
-  const total = data.steps.length;
-  const pct = Math.round((step/total)*100);
-  box.innerHTML=`
-  <div class="les-top">
-    <button class="btn-ic" onclick="closeM('m-lesson')" style="flex-shrink:0">✕</button>
-    <div style="flex:1;margin:0 10px">
-      <div style="font-size:.7rem;color:var(--txt3);margin-bottom:4px">${esc(data.title)} · ${step+1}/${total}</div>
-      <div style="height:4px;background:var(--bg2);border-radius:2px"><div style="width:${pct}%;height:100%;background:var(--cr);border-radius:2px;transition:width .4s"></div></div>
-    </div>
-    <button class="btn-ic" onclick="closeM('m-lesson')">✕</button>
-  </div>
-  <div id="les-body" style="flex:1;overflow-y:auto;padding:16px 16px 8px"></div>
-  <div class="les-nav">
-    ${step>0?`<button class="btn btn-g btn-sm" onclick="prevLes()">← Retour</button>`:'<div></div>'}
-    <button class="btn btn-p" id="les-nxt" onclick="nextLes()">
-      ${step===total-1?'Terminer ✓':'Suivant →'}
+  const levelNames={'pre-a1':'Pré-A1','a1':'A1 Débutant','a2':'A2 Élémentaire','b1':'B1 Intermédiaire','b2':'B2 Avancé','c1':'C1 Maîtrise'};
+
+  let html=`<div class="lesson-map-wrap">
+  <div class="lesson-map-hdr">
+    <button class="back-btn" onclick="goTo('home')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
     </button>
-  </div>`;
-  renderStep(s);
-}
-function prevLes(){ if(lessonState.step>0){ lessonState.step--; renderLesStep(); } }
-function nextLes(){
-  const { data, step } = lessonState;
-  if(step>=data.steps.length-1){ finishLesson(); return; }
-  lessonState.step++;
-  renderLesStep();
-}
-function finishLesson(){
-  const { lvId, data } = lessonState;
-  const lv = LVS.find(l=>l.id===lvId);
-  authUpdateProgress(lvId, lv?.xp||50);
-  xpToast(lv?.xp||50);
-  closeM('m-lesson');
-  showCompletion(lvId);
-  renderHome(); renderPath();
-}
-function showCompletion(lvId){
-  const lv=LVS.find(l=>l.id===lvId);
-  const box=$('m-complete')?.querySelector('.modal-box');
-  if(!box||!lv) return;
-  box.innerHTML=`
-  <div style="text-align:center;padding:32px 20px">
-    <div style="font-size:4rem;margin-bottom:16px">🎉</div>
-    <div style="font-family:var(--ffs);font-size:1.6rem;font-weight:700;margin-bottom:8px">Niveau terminé!</div>
-    <div style="color:var(--txt2);margin-bottom:16px">${esc(lv.name)}</div>
-    <div style="font-size:2rem;font-weight:800;color:var(--cr);margin-bottom:20px">+${lv.xp} XP 🌟</div>
-    <button class="btn btn-p" style="width:100%" onclick="closeM('m-complete')">Continuer →</button>
-  </div>`;
-  openM('m-complete');
-}
-function renderStep(s){
-  const body=$('les-body'); if(!body) return;
-  const fns={intro:renderIntro,vocab:renderVocab,grammar:renderGrammar,exercise:renderExercise,fill:renderFill,dragdrop:renderDD,dialogue:renderDialogue,speak:renderSpeak,summary:renderSummary};
-  if(fns[s.type]) fns[s.type](s, body);
-  else body.innerHTML=`<div class="card"><h3>${esc(s.title||'')}</h3></div>`;
-}
-function renderIntro(s,el){
-  el.innerHTML=`
-  <div class="step-intro">
-    <h2 class="step-title">${esc(s.title)}</h2>
-    <p class="step-text">${esc(s.text)}</p>
-    ${s.tip?`<div class="tip-box">💡 ${esc(s.tip)}</div>`:''}
-  </div>`;
-}
-function renderVocab(s,el){
-  el.innerHTML=`<h3 class="step-h3">${esc(s.title)}</h3>
-  <div class="vocab-list">
-    ${s.words.map(w=>`<div class="vocab-item">
-      <div class="vi-top"><span class="vi-fr">${esc(w.fr)}</span><button class="btn-tts" onclick="speak('${esc(w.fr)}')">🔊</button></div>
-      <div class="vi-pron">[${esc(w.pron||'')}]</div>
-      <div class="vi-mean">${esc(w.meaning)}</div>
-      ${w.ex?`<div class="vi-ex">"${esc(w.ex)}"</div>`:''}
-    </div>`).join('')}
-  </div>`;
-}
-function renderGrammar(s,el){
-  const r=s.rule;
-  el.innerHTML=`<h3 class="step-h3">${esc(s.title)}</h3>
-  <div class="grammar-box">
-    <div class="gb-title">${esc(r.title)}</div>
-    <table class="conj-table">
-      ${(r.rows||[]).map(row=>`<tr><td class="ct-fr">${esc(row[0])}</td><td class="ct-tr">${esc(row[1])}</td></tr>`).join('')}
-    </table>
-    ${r.note?`<div class="gb-note">📌 ${esc(r.note)}</div>`:''}
-  </div>`;
-}
-function renderExercise(s,el){
-  el.innerHTML=`<h3 class="step-h3">${esc(s.title)}</h3>
-  <div class="quiz-q">${esc(s.question)}</div>
-  <div class="quiz-opts" id="q-opts">
-    ${s.opts.map((o,i)=>`<button class="q-btn" onclick="checkEx(${i},${s.ans},'${esc(s.exp)}',this)">${esc(o)}</button>`).join('')}
+    <h2 class="lesson-map-title">${esc(levelNames[levelId]||levelId)}</h2>
   </div>
-  <div class="feedback-box" id="ex-fb"></div>`;
-}
-function checkEx(idx,ans,exp,btn){
-  const opts=document.querySelectorAll('#q-opts .q-btn');
-  opts.forEach((b,i)=>{ b.disabled=true; b.classList.toggle('correct',i===ans); b.classList.toggle('wrong',i!==ans&&i===idx); });
-  const fb=$('ex-fb');
-  if(fb) fb.innerHTML=`<div class="${idx===ans?'fb-ok':'fb-err'}">${idx===ans?'✅ Correct!':'❌ Incorrect.'} ${esc(exp)}</div>`;
-  if(idx===ans) xpToast(10);
-  setTimeout(()=>nextLes(),1800);
-}
-function renderFill(s,el){
-  el.innerHTML=`<h3 class="step-h3">${esc(s.title)}</h3>
-  <div class="fill-prompt">${esc(s.prompt)}</div>
-  <input class="fill-inp" type="text" placeholder="Votre réponse..." id="fill-ans" onkeydown="if(event.key==='Enter')checkFill()"/>
-  <div class="fill-hint">💡 Indice: ${esc(s.hint)}</div>
-  <button class="btn btn-p" onclick="checkFill()" style="margin-top:10px">Vérifier</button>
-  <div class="feedback-box" id="fill-fb"></div>`;
-}
-function checkFill(){
-  const val=($('fill-ans')?.value||'').trim().toLowerCase();
-  const s=lessonState.data.steps[lessonState.step];
-  const ans=s.answer.toLowerCase();
-  const fb=$('fill-fb');
-  if(val===ans||val.replace(/\s+/g,' ')===ans){
-    if(fb) fb.innerHTML=`<div class="fb-ok">✅ Parfait!</div>`;
-    xpToast(15);
-    setTimeout(()=>nextLes(),1400);
-  } else {
-    if(fb) fb.innerHTML=`<div class="fb-err">❌ La bonne réponse est: <strong>${esc(s.answer)}</strong></div>`;
-  }
-}
-function renderDD(s,el){
-  let placed=[]; let bank=[...s.words];
-  el.innerHTML=`<h3 class="step-h3">${esc(s.title)}</h3>
-  <div class="dd-instr">${esc(s.instruction)}</div>
-  <div class="dd-zone" id="dd-zone"><span class="dd-ph">Déposez les mots ici...</span></div>
-  <div class="dd-bank" id="dd-bank">${bank.map((w,i)=>`<button class="dd-word" onclick="ddClick(this,'${esc(w)}')">${esc(w)}</button>`).join('')}</div>
-  <button class="btn btn-p btn-sm" onclick="checkDD('${esc(s.correct)}')" style="margin-top:10px">Vérifier</button>
-  <div class="feedback-box" id="dd-fb"></div>`;
-}
-function ddClick(el,word){
-  const zone=$('dd-zone');
-  if(!zone) return;
-  const ph=zone.querySelector('.dd-ph');
-  if(ph) ph.remove();
-  const btn=document.createElement('button');
-  btn.className='dd-word placed';
-  btn.textContent=word;
-  btn.onclick=()=>{ btn.remove(); el.style.display=''; };
-  zone.appendChild(btn);
-  el.style.display='none';
-}
-function checkDD(correct){
-  const zone=$('dd-zone');
-  const placed=Array.from(zone?.querySelectorAll('.dd-word')||[]).map(b=>b.textContent).join(' ');
-  const fb=$('dd-fb');
-  if(placed===correct){
-    if(fb) fb.innerHTML=`<div class="fb-ok">✅ Parfait!</div>`;
-    xpToast(15);
-    setTimeout(()=>nextLes(),1400);
-  } else {
-    if(fb) fb.innerHTML=`<div class="fb-err">❌ Réponse correcte: <strong>${esc(correct)}</strong></div>`;
-  }
-}
-function renderDialogue(s,el){
-  el.innerHTML=`<h3 class="step-h3">${esc(s.title)}</h3>
-  <div class="dialogue">
-    ${s.lines.map(l=>`<div class="dl-line ${l.b?'dl-b':'dl-a'}">
-      <div class="dl-spk">${esc(l.speaker)}</div>
-      <div class="dl-bubble">
-        <div class="dl-fr">${esc(l.fr)}</div>
-        <div class="dl-tr">${esc(l.tr)}</div>
-        <button class="btn-tts" onclick="speak('${esc(l.fr)}')">🔊</button>
+  <div class="lesson-map-body">`;
+
+  for(let u=1;u<=10;u++){
+    html+=`<div class="unit-block">
+      <div class="unit-hdr">
+        <div class="unit-badge">Unité ${u}</div>
+        <div class="unit-title">${getUnitTitle(levelId,u)}</div>
       </div>
-    </div>`).join('')}
-  </div>`;
-}
-function renderSpeak(s,el){
-  el.innerHTML=`<h3 class="step-h3">${esc(s.title)}</h3>
-  <div class="speak-box">
-    <div class="speak-phrase">${esc(s.phrase)}</div>
-    <div class="speak-tr">${esc(s.translation)}</div>
-    <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn btn-o btn-sm" onclick="speak('${esc(s.phrase)}')">🔊 Écouter</button>
-      <button class="btn btn-o btn-sm" onclick="speak('${esc(s.phrase)}',0.6)">🐢 Lent</button>
-    </div>
-    <div class="speak-tip">👆 Répétez la phrase à voix haute après avoir écouté.</div>
-  </div>`;
-}
-function renderSummary(s,el){
-  el.innerHTML=`<h3 class="step-h3">${esc(s.title)}</h3>
-  <div class="summary-box">
-    ${s.points.map(p=>`<div class="sum-row">✅ ${esc(p)}</div>`).join('')}
-  </div>
-  <div style="text-align:center;margin-top:20px;font-size:2rem">🎊</div>`;
-}
+      <div class="unit-lessons">`;
 
-// ── PLACEMENT TEST ─────────────────────────────────────────────────
-const PL_QS=[
-  {q:'Comment dit-on "Hello" en français?',opts:['Merci','Bonjour','Au revoir','Bonsoir'],ans:1,lvl:'pre-a1'},
-  {q:'Choisissez le bon article: ___ maison.',opts:['le','la','les','un'],ans:1,lvl:'pre-a1'},
-  {q:'Conjuguez "être": Je ___',opts:['es','est','suis','sommes'],ans:2,lvl:'a1'},
-  {q:'"I have" en français:',opts:['Je suis','J\'ai','Je veux','Je fais'],ans:1,lvl:'a1'},
-  {q:'Le passé composé de "manger": J\'ai ___',opts:['manger','mange','mangé','mangerai'],ans:2,lvl:'a2'},
-  {q:'Choisissez le bon temps: Hier, je ___ au cinéma. (aller)',opts:['allais','suis allé','vais aller','irai'],ans:1,lvl:'a2'},
-  {q:'"Although it rains, I walk." Utilisez le subjonctif:',opts:['Bien qu\'il pleuve','Bien qu\'il pleut','Parce qu\'il pleut','Quand il pleut'],ans:0,lvl:'b1'},
-  {q:'L\'imparfait de "habiter": Quand j\'étais enfant, j\'___ à Lyon.',opts:['habitais','ai habité','habite','habiterai'],ans:0,lvl:'b1'},
-  {q:'Le conditionnel de "vouloir": Je ___ visiter Paris.',opts:['veux','voudrais','voulais','voulu'],ans:1,lvl:'b2'},
-  {q:'Choisissez le bon mode: Il est important que vous ___ à l\'heure.',opts:['êtes','serez','soyez','étiez'],ans:2,lvl:'b2'},
-];
-function startPlacement(){
-  plState={step:0,scores:{},startTime:Date.now()};
-  openM('m-placement');
-  renderPl();
-}
-function renderPl(){
-  const box=$('m-placement')?.querySelector('.modal-box');
-  if(!box) return;
-  if(plState.step>=PL_QS.length){ finishPl(); return; }
-  const q=PL_QS[plState.step];
-  const pct=Math.round(plState.step/PL_QS.length*100);
-  box.innerHTML=`
-  <div class="les-top">
-    <div style="flex:1">
-      <div style="font-size:.7rem;color:var(--cr);font-weight:700;margin-bottom:4px">TEST DE PLACEMENT · ${plState.step+1}/${PL_QS.length}</div>
-      <div style="height:4px;background:var(--bg2);border-radius:2px"><div style="width:${pct}%;height:100%;background:var(--cr);border-radius:2px"></div></div>
-    </div>
-  </div>
-  <div style="padding:20px">
-    <div class="quiz-q">${esc(q.q)}</div>
-    <div class="quiz-opts">
-      ${q.opts.map((o,i)=>`<button class="q-btn" onclick="answerPl(${i},${q.ans},'${q.lvl}',this)">${esc(o)}</button>`).join('')}
-    </div>
-  </div>`;
-}
-function answerPl(idx,ans,lvl,btn){
-  const opts=document.querySelectorAll('#m-placement .q-btn');
-  opts.forEach((b,i)=>{ b.disabled=true; b.classList.toggle('correct',i===ans); b.classList.toggle('wrong',i!==ans&&i===idx); });
-  if(idx===ans){ plState.scores[lvl]=(plState.scores[lvl]||0)+1; }
-  setTimeout(()=>{ plState.step++; renderPl(); },900);
-}
-function finishPl(){
-  const sc=plState.scores;
-  let level='pre-a1';
-  if((sc['c1']||0)>=1) level='c1';
-  else if((sc['b2']||0)>=1) level='b2';
-  else if((sc['b1']||0)>=2) level='b1';
-  else if((sc['a2']||0)>=1) level='a2';
-  else if((sc['a1']||0)>=2) level='a1';
-  authUpdateUser({ placementDone:true, currentLevel:level });
-  const box=$('m-placement')?.querySelector('.modal-box');
-  if(box) box.innerHTML=`
-  <div style="text-align:center;padding:36px 20px">
-    <div style="font-size:3.5rem;margin-bottom:16px">🎯</div>
-    <div style="font-family:var(--ffs);font-size:1.5rem;font-weight:700;margin-bottom:8px">Résultat du test</div>
-    <div style="color:var(--txt2);font-size:.88rem;margin-bottom:16px">Votre niveau estimé:</div>
-    <div style="font-size:2.5rem;font-weight:800;color:var(--cr);margin-bottom:8px">${(BANDS[level]?.label||level).toUpperCase()}</div>
-    <div style="color:var(--txt2);font-size:.84rem;margin-bottom:24px">${esc(BANDS[level]?.desc||'')}</div>
-    <button class="btn btn-p" style="width:100%" onclick="closeM('m-placement');nav('path')">Voir mon parcours →</button>
-  </div>`;
-}
+    for(let l=1;l<=5;l++){
+      const lessonId=`${levelId}-u${u}-l${l}`;
+      const done=(s?.completedLessons||[]).includes(lessonId);
+      const unlocked=isLessonUnlocked(levelId,u,l);
+      const wbUnlocked=done;
+      const content=typeof buildLessonContent==='function'?buildLessonContent(levelId,u,l):{title:`Leçon ${l}`,xp:50};
 
-// ── WORDBOOK ───────────────────────────────────────────────────────
-function renderWordbook(){
-  const el=$('wordbook-page'); if(!el) return;
-  const user=authGetCurrent();
-  const saved=user?.savedWords||[];
-  el.innerHTML=`
-  <div class="page-header"><h2 class="page-title">📖 Carnet de Vocabulaire</h2><p class="page-sub">${DICTIONARY.length} mots · ${saved.length} sauvegardés</p></div>
-  <input class="wb-search" type="text" placeholder="Rechercher un mot..." oninput="filterDict(this.value)" id="wb-s"/>
-  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-    <select id="wb-type" class="wb-filter" onchange="filterDict($('wb-s').value)">
-      <option value="">Tous les types</option>
-      <option value="verb">Verbes</option>
-      <option value="noun">Noms</option>
-      <option value="adj">Adjectifs</option>
-      <option value="excl">Exclamations</option>
-    </select>
-    <select id="wb-lvl" class="wb-filter" onchange="filterDict($('wb-s').value)">
-      <option value="">Tous les niveaux</option>
-      ${['A1','A2','B1','B2','C1'].map(l=>`<option value="${l}">${l}</option>`).join('')}
-    </select>
-  </div>
-  <div id="dict-list"></div>`;
-  filterDict('');
-}
-function filterDict(q){
-  const type=($('wb-type')?.value||'').toLowerCase();
-  const lvl=($('wb-lvl')?.value||'').toLowerCase();
-  const words=DICTIONARY.filter(w=>{
-    const matchQ=!q||(w.fr+w.eng+w.ar).toLowerCase().includes(q.toLowerCase());
-    const matchT=!type||w.type===type;
-    const matchL=!lvl||w.level.toLowerCase()===lvl;
-    return matchQ&&matchT&&matchL;
-  });
-  const el=$('dict-list'); if(!el) return;
-  if(!words.length){ el.innerHTML='<div style="text-align:center;color:var(--txt3);padding:32px">Aucun résultat</div>'; return; }
-  el.innerHTML=words.map(w=>`<div class="dict-card">
-    <div class="dc-top">
-      <div>
-        <span class="dc-fr">${esc(w.fr)}</span>
-        <span class="dc-pron">[${esc(w.pron)}]</span>
-        <span class="dc-type">${w.type}</span>
-      </div>
-      <div style="display:flex;gap:6px">
-        <button class="btn-tts" onclick="speak('${esc(w.fr)}')">🔊</button>
-        <button class="btn-tts" onclick="saveWord('${esc(w.fr)}')" title="Sauvegarder">🔖</button>
-      </div>
-    </div>
-    <div class="dc-eng">${esc(w.eng)}</div>
-    <div class="dc-ar">${esc(w.ar)}</div>
-    <div class="dc-ex">"${esc(w.ex)}"</div>
-    ${w.note?`<div class="dc-note">💡 ${esc(w.note)}</div>`:''}
-    <div class="dc-syn">Synonymes: ${(w.syn||[]).map(s=>`<span class="syn-chip">${esc(s)}</span>`).join('')}</div>
-    <div class="dc-lvl" style="margin-top:4px"><span class="level-chip">${w.level}</span></div>
-  </div>`).join('');
-}
-function saveWord(fr){
-  const user=authGetCurrent(); if(!user) return;
-  const saved=user.savedWords||[];
-  if(!saved.includes(fr)){
-    authUpdateUser({savedWords:[...saved,fr]});
-    toast(`"${fr}" sauvegardé! 🔖`,'ok');
-  } else {
-    toast('Déjà dans votre carnet.','info');
-  }
-}
-
-// ── TRAINING ───────────────────────────────────────────────────────
-function renderTraining(){
-  const el=$('training-page'); if(!el) return;
-  el.innerHTML=`
-  <div class="page-header"><h2 class="page-title">🎯 Entraînement</h2></div>
-  <div class="training-grid">
-    <div class="tr-card" onclick="startFlash()">
-      <div class="tr-ic">🃏</div><div class="tr-nm">Flashcards</div>
-      <div class="tr-ds">Mémorisez le vocabulaire</div>
-    </div>
-    <div class="tr-card" onclick="startQuiz()">
-      <div class="tr-ic">❓</div><div class="tr-nm">Quiz Rapide</div>
-      <div class="tr-ds">Testez vos connaissances</div>
-    </div>
-    <div class="tr-card" onclick="startListening()">
-      <div class="tr-ic">🎧</div><div class="tr-nm">Écoute</div>
-      <div class="tr-ds">Entraînez votre oreille</div>
-    </div>
-    <div class="tr-card" onclick="startSpeaking()">
-      <div class="tr-ic">🎤</div><div class="tr-nm">Expression Orale</div>
-      <div class="tr-ds">Parlez à voix haute</div>
-    </div>
-    <div class="tr-card" onclick="startGrammarDrill()">
-      <div class="tr-ic">📐</div><div class="tr-nm">Grammaire</div>
-      <div class="tr-ds">Exercices de grammaire</div>
-    </div>
-    <div class="tr-card" onclick="startReview()">
-      <div class="tr-ic">🔄</div><div class="tr-nm">Révision</div>
-      <div class="tr-ds">Revoir les difficultés</div>
-    </div>
-  </div>`;
-}
-function startFlash(){
-  const cards=DICTIONARY.slice(0,20);
-  flashState={idx:0,side:'front',cards};
-  openM('m-flash');
-  renderFlash();
-}
-function renderFlash(){
-  const box=$('m-flash')?.querySelector('.modal-box'); if(!box) return;
-  const c=flashState.cards[flashState.idx];
-  box.innerHTML=`
-  <div class="les-top">
-    <button class="btn-ic" onclick="closeM('m-flash')">✕</button>
-    <div style="flex:1;text-align:center;font-size:.8rem;color:var(--txt3)">${flashState.idx+1}/${flashState.cards.length}</div>
-    <div style="width:36px"></div>
-  </div>
-  <div style="padding:20px;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center">
-    <div class="flash-card" onclick="flipFlash()">
-      ${flashState.side==='front'
-        ?`<div style="text-align:center"><div style="font-size:2rem;font-weight:700;color:var(--cr);margin-bottom:8px">${esc(c.fr)}</div><div style="font-size:.82rem;color:var(--txt3)">[${esc(c.pron)}]</div><div style="margin-top:16px;font-size:.78rem;color:var(--txt3)">Tapez pour voir la traduction</div></div>`
-        :`<div style="text-align:center"><div style="font-size:1.3rem;font-weight:600;margin-bottom:6px">${esc(c.eng)}</div><div style="font-size:1.1rem;color:var(--txt2)">${esc(c.ar)}</div><div style="font-size:.82rem;font-style:italic;color:var(--txt3);margin-top:12px">"${esc(c.ex)}"</div></div>`
-      }
-    </div>
-    <div style="display:flex;gap:12px;margin-top:20px">
-      <button class="btn btn-g btn-sm" onclick="prevFlash()">←</button>
-      <button class="btn btn-o btn-sm" onclick="speak('${esc(c.fr)}')">🔊</button>
-      <button class="btn btn-p btn-sm" onclick="nextFlash()">→</button>
-    </div>
-  </div>`;
-}
-function flipFlash(){ flashState.side=flashState.side==='front'?'back':'front'; renderFlash(); }
-function nextFlash(){ if(flashState.idx<flashState.cards.length-1){ flashState.idx++; flashState.side='front'; renderFlash(); } else { toast('Fin des flashcards! 🎉','ok'); closeM('m-flash'); } }
-function prevFlash(){ if(flashState.idx>0){ flashState.idx--; flashState.side='front'; renderFlash(); } }
-
-function startQuiz(){
-  const qs=DICTIONARY.slice(0,12).map(w=>({
-    q:`Que signifie "${w.fr}"?`,
-    opts:shuffleArr([w.eng,...DICTIONARY.filter(x=>x!==w).slice(0,3).map(x=>x.eng)]),
-    ans:0,
-    _correct:w.eng,
-  })).map(q=>({...q,ans:q.opts.indexOf(q._correct)}));
-  lessonState={lvId:null,step:0,data:{title:'Quiz Rapide',steps:qs.map(q=>({type:'exercise',...q,exp:`La réponse correcte est "${q.opts[q.ans]}"`}))}};
-  openM('m-lesson');
-  renderLesStep();
-}
-function shuffleArr(a){ return a.sort(()=>Math.random()-.5); }
-
-function startListening(){
-  const words=DICTIONARY.slice(0,10);
-  openM('m-lesson');
-  lessonState={lvId:null,step:0,data:{title:'Exercice d\'Écoute',steps:words.map(w=>({type:'speak',title:`Écoute et mémorise`,phrase:w.fr,translation:w.eng}))}};
-  renderLesStep();
-}
-function startSpeaking(){
-  const phrases=['Bonjour, comment allez-vous?','Je m\'appelle Marie, et vous?','Je voudrais un café, s\'il vous plaît.','Où est la gare, s\'il vous plaît?','C\'est combien?'];
-  openM('m-lesson');
-  lessonState={lvId:null,step:0,data:{title:'Expression Orale',steps:phrases.map((p,i)=>({type:'speak',title:`Phrase ${i+1}`,phrase:p,translation:''}))}};
-  renderLesStep();
-}
-function startGrammarDrill(){
-  openM('m-lesson');
-  const tip = GRAMMAR_TIPS[0];
-  lessonState={lvId:null,step:0,data:{title:'Exercice de Grammaire',steps:[
-    {type:'intro',title:tip.topic,text:tip.rule,tip:`Exemples: ${tip.examples.join(', ')}`},
-    ...tip.test.map(t=>({type:'exercise',title:'Testez-vous',question:t.q,opts:t.opts,ans:t.ans,exp:t.exp})),
-  ]}};
-  renderLesStep();
-}
-function startReview(){
-  const user=authGetCurrent();
-  const missed=user?.missedWords||[];
-  if(!missed.length){ toast('Aucune révision nécessaire! Continuez comme ça 🌟','ok'); return; }
-  toast('Révision des mots difficiles...','info');
-  startFlash();
-}
-
-// ── SITUATIONS ─────────────────────────────────────────────────────
-function renderSits(){
-  const el=$('situations-page'); if(!el) return;
-  el.innerHTML=`
-  <div class="page-header"><h2 class="page-title">💬 Situations Réelles</h2><p class="page-sub">Pratiquez dans des contextes authentiques</p></div>
-  <div class="sit-grid">
-    ${SITUATIONS.map(s=>`<div class="sit-card" onclick="openSit('${s.id}')">
-      <div class="sit-ic">${s.icon}</div>
-      <div class="sit-nm">${esc(s.name)}</div>
-      <div class="sit-ds">${esc(s.desc)}</div>
-    </div>`).join('')}
-  </div>`;
-}
-function openSit(id){
-  const s=SITUATIONS.find(x=>x.id===id); if(!s) return;
-  sitState={id};
-  const box=$('m-sit')?.querySelector('.modal-box'); if(!box) return;
-  box.innerHTML=`
-  <div class="les-top">
-    <button class="btn-ic" onclick="closeM('m-sit')">✕</button>
-    <div style="flex:1;text-align:center;font-weight:600">${s.icon} ${esc(s.name)}</div>
-    <div style="width:36px"></div>
-  </div>
-  <div style="padding:16px">
-    <div class="dialogue">
-      ${s.lines.map(l=>`<div class="dl-line ${l.b?'dl-b':'dl-a'}">
-        <div class="dl-spk">${esc(l.speaker)}</div>
-        <div class="dl-bubble">
-          <div class="dl-fr">${esc(l.fr)}</div>
-          <div class="dl-tr">${esc(l.tr)}</div>
-          <button class="btn-tts" onclick="speak('${esc(l.fr)}')">🔊</button>
+      html+=`
+      <div class="lesson-row ${done?'lesson-done':''} ${!unlocked?'lesson-locked':''}">
+        <div class="lesson-row-left" onclick="${unlocked?`startLesson('${levelId}',${u},${l})`:''}">
+          <div class="lesson-status-icon">
+            ${done
+              ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="#27AE60"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>'
+              : unlocked
+                ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
+                : '<svg width="18" height="18" viewBox="0 0 24 24" fill="#888"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>'
+            }
+          </div>
+          <div class="lesson-row-info">
+            <div class="lesson-row-title">Leçon ${l}: ${esc(content.title||'')}</div>
+            <div class="lesson-row-meta">${content.duration||'10 min'} · +${content.xp||50} XP</div>
+          </div>
         </div>
+        <button class="wb-btn ${wbUnlocked?'':'wb-btn-locked'}"
+          onclick="${wbUnlocked?`openWordbook('${lessonId}')`:''}"
+          title="${wbUnlocked?'Ouvrir le WordBook':'Terminez la leçon pour débloquer'}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          ${wbUnlocked?'WordBook':'🔒'}
+        </button>
+      </div>`;
+    }
+    html+=`</div></div>`;
+  }
+
+  html+=`</div></div>`;
+  el.innerHTML=html;
+}
+
+function getUnitTitle(levelId,u){
+  const titles={
+    'a1':['Salutations','La famille','Les chiffres','Les couleurs','La maison','Les métiers','La nourriture','Les vêtements','Les transports','Les loisirs'],
+    'a2':['Le passé','Le futur','Les pronoms','La santé','Les sports','La météo','Les achats','Les voyages','La culture','Les émotions'],
+    'pre-a1':['L\'alphabet','Les sons','Les voyelles','Les consonnes','Rythme et accent','Mots de base','Chiffres 1-10','Couleurs','Corps humain','Bonjour!'],
+  };
+  return (titles[levelId]||[])[u-1]||`Unité ${u}`;
+}
+
+// ── Lesson Player ────────────────────────────────────────────
+function startLesson(levelId,unitNum,lessonNum){
+  if(!getSession()){ openM('m-auth'); return; }
+  const content=typeof buildLessonContent==='function'
+    ? buildLessonContent(levelId,unitNum,lessonNum)
+    : {id:`${levelId}-u${unitNum}-l${lessonNum}`,vocab:[],grammar:{},exercises:[],xp:50};
+  currentLesson=content;
+  renderLessonPlayer(content);
+  openM('m-lesson');
+}
+
+let _lessonStep=0;
+let _lessonSteps=[];
+
+function renderLessonPlayer(content){
+  const box=$('m-lesson')?.querySelector('.modal-box');
+  if(!box) return;
+
+  _lessonStep=0;
+  _lessonSteps=[
+    {type:'intro',   content},
+    {type:'vocab',   words: content.vocab},
+    {type:'grammar', rule: content.grammar},
+    ...((content.exercises||[]).map(ex=>({type:'exercise',ex}))),
+    {type:'wordbook',words: content.vocab, lessonId: content.id},
+    {type:'complete',content},
+  ];
+
+  renderLessonStep();
+}
+
+function renderLessonStep(){
+  const box=$('m-lesson')?.querySelector('.modal-box');
+  if(!box) return;
+  const step=_lessonSteps[_lessonStep];
+  const total=_lessonSteps.length;
+  const pct=Math.round((_lessonStep/total)*100);
+
+  let inner='';
+
+  if(step.type==='intro'){
+    const c=step.content;
+    inner=`
+    <div class="ls-intro">
+      <div class="ls-progress-bar"><div class="ls-progress-fill" style="width:${pct}%"></div></div>
+      <div class="ls-step-label">Introduction</div>
+      <div class="ls-intro-icon">📚</div>
+      <h2 class="ls-intro-title">${esc(c.title||'')}</h2>
+      <div class="ls-intro-meta">${c.duration||'10 min'} · +${c.xp||50} XP · ${(c.vocab||[]).length} mots</div>
+      <p class="ls-intro-desc">Dans cette leçon, vous allez apprendre du vocabulaire essentiel et une règle de grammaire.</p>
+      <button class="btn btn-p ls-next-btn" onclick="nextLessonStep()">Commencer
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+    </div>`;
+  }
+
+  else if(step.type==='vocab'){
+    const words=step.words||[];
+    let wIdx=parseInt(box.dataset.wIdx||'0');
+    const w=words[wIdx]||{};
+    const imgUrl=typeof getWordImage==='function'?getWordImage(w.fr||'',w.type||'noun'):null;
+    inner=`
+    <div class="ls-vocab">
+      <div class="ls-progress-bar"><div class="ls-progress-fill" style="width:${pct}%"></div></div>
+      <div class="ls-step-label">Vocabulaire ${wIdx+1}/${words.length}</div>
+      <div class="vocab-card">
+        ${imgUrl?`<img src="${imgUrl}" class="vocab-card-img" loading="lazy" onerror="this.style.display='none'"/>`:''}
+        <div class="vocab-card-fr">${esc(w.fr||'')}</div>
+        <div class="vocab-card-pron">[${esc(w.pron||'')}]</div>
+        <button class="vocab-speak-btn" onclick="speak('${esc(w.fr||'')}')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+        </button>
+        <div class="vocab-card-eng">${esc(w.eng||'')}</div>
+        <div class="vocab-card-ar">${esc(w.ar||'')}</div>
+        <div class="vocab-card-ex">${esc(w.ex||'')}</div>
+        ${w.note?`<div class="vocab-card-note">💡 ${esc(w.note)}</div>`:''}
+      </div>
+      <div class="vocab-nav">
+        ${wIdx>0?`<button class="btn btn-o" onclick="vocabNav(-1)">← Précédent</button>`:'<div></div>'}
+        ${wIdx<words.length-1
+          ?`<button class="btn btn-p" onclick="vocabNav(1)">Suivant →</button>`
+          :`<button class="btn btn-p" onclick="nextLessonStep()">Continuer →</button>`
+        }
+      </div>
+    </div>`;
+  }
+
+  else if(step.type==='grammar'){
+    const g=step.rule||{};
+    inner=`
+    <div class="ls-grammar">
+      <div class="ls-progress-bar"><div class="ls-progress-fill" style="width:${pct}%"></div></div>
+      <div class="ls-step-label">Grammaire</div>
+      <div class="grammar-card">
+        <div class="grammar-card-icon">📐</div>
+        <div class="grammar-card-rule">${esc(g.rule||'')}</div>
+        ${(g.examples||[]).length?`<div class="grammar-examples">${g.examples.map(e=>`<div class="grammar-ex-item">✓ ${esc(e)}</div>`).join('')}</div>`:''}
+        ${g.tip?`<div class="grammar-tip">💡 ${esc(g.tip)}</div>`:''}
+      </div>
+      <button class="btn btn-p ls-next-btn" onclick="nextLessonStep()">J'ai compris →</button>
+    </div>`;
+  }
+
+  else if(step.type==='exercise'){
+    inner=renderExerciseStep(step.ex, pct);
+  }
+
+  else if(step.type==='wordbook'){
+    const words=step.words||[];
+    inner=`
+    <div class="ls-wordbook">
+      <div class="ls-progress-bar"><div class="ls-progress-fill" style="width:${pct}%"></div></div>
+      <div class="ls-step-label">📖 WordBook — Révision</div>
+      <p class="ls-wb-desc">Voici tous les mots de cette leçon. Révisez-les avant de terminer!</p>
+      <div class="wb-review-list">
+        ${words.map(w=>`
+        <div class="wb-review-row">
+          <div class="wb-review-fr">${esc(w.fr)}</div>
+          <div class="wb-review-mid">
+            <div class="wb-review-pron">[${esc(w.pron||'')}]</div>
+            <div class="wb-review-eng">${esc(w.eng)}</div>
+          </div>
+          <div class="wb-review-ar">${esc(w.ar)}</div>
+          <button class="wb-review-speak" onclick="speak('${esc(w.fr)}')">🔊</button>
+        </div>`).join('')}
+      </div>
+      <button class="btn btn-p ls-next-btn" onclick="nextLessonStep()">Terminer la leçon →</button>
+    </div>`;
+  }
+
+  else if(step.type==='complete'){
+    const c=step.content;
+    completeLesson(c.id, c.xp||50);
+    inner=`
+    <div class="ls-complete">
+      <div class="ls-complete-anim">🎉</div>
+      <h2 class="ls-complete-title">Leçon terminée!</h2>
+      <div class="ls-complete-xp">+${c.xp||50} XP gagnés</div>
+      <div class="ls-complete-stars">⭐⭐⭐</div>
+      <p class="ls-complete-msg">Félicitations! Le WordBook de cette leçon est maintenant débloqué.</p>
+      <div class="ls-complete-actions">
+        <button class="btn btn-o" onclick="closeM('m-lesson');openWordbook('${c.id}')">📖 Voir WordBook</button>
+        <button class="btn btn-p" onclick="closeM('m-lesson');goTo('lesson-map',{levelId:'${c.levelId}'})">Continuer →</button>
+      </div>
+    </div>`;
+  }
+
+  box.innerHTML=inner;
+  box.dataset.wIdx='0';
+}
+
+function vocabNav(dir){
+  const box=$('m-lesson')?.querySelector('.modal-box');
+  if(!box) return;
+  const step=_lessonSteps[_lessonStep];
+  if(step.type!=='vocab') return;
+  let idx=parseInt(box.dataset.wIdx||'0')+dir;
+  idx=Math.max(0,Math.min((step.words||[]).length-1,idx));
+  box.dataset.wIdx=String(idx);
+  renderLessonStep();
+}
+
+function nextLessonStep(){
+  _lessonStep=Math.min(_lessonStep+1,_lessonSteps.length-1);
+  renderLessonStep();
+}
+
+function renderExerciseStep(ex, pct){
+  if(!ex) return '';
+  if(ex.type==='mcq') return renderMcq(ex,pct);
+  if(ex.type==='fill') return renderFill(ex,pct);
+  if(ex.type==='listen') return renderListen(ex,pct);
+  if(ex.type==='speak') return renderSpeak(ex,pct);
+  return `<div class="ls-exercise"><button class="btn btn-p" onclick="nextLessonStep()">Suivant →</button></div>`;
+}
+
+function renderMcq(ex,pct){
+  return `
+  <div class="ls-exercise">
+    <div class="ls-progress-bar"><div class="ls-progress-fill" style="width:${pct}%"></div></div>
+    <div class="ls-step-label">${esc(ex.title||'Quiz')}</div>
+    <div class="ex-question">${esc(ex.question||'')}</div>
+    <div class="ex-opts">
+      ${(ex.opts||[]).map((o,i)=>`
+      <button class="ex-opt" data-idx="${i}" onclick="checkMcq(${i},${ex.ans||0},'${esc(ex.exp||'')}')">
+        ${esc(o)}
+      </button>`).join('')}
+    </div>
+    <div id="ex-feedback" class="ex-feedback"></div>
+  </div>`;
+}
+
+function checkMcq(chosen,correct,exp){
+  document.querySelectorAll('.ex-opt').forEach((b,i)=>{
+    b.disabled=true;
+    if(i===correct) b.classList.add('opt-correct');
+    else if(i===chosen) b.classList.add('opt-wrong');
+  });
+  const fb=$('ex-feedback');
+  if(fb){
+    fb.innerHTML=`<div class="${chosen===correct?'fb-correct':'fb-wrong'}">
+      ${chosen===correct?'✅ Correct!':'❌ Incorrect.'} ${esc(exp)}
+    </div><button class="btn btn-p btn-sm" style="margin-top:12px" onclick="nextLessonStep()">Suivant →</button>`;
+  }
+}
+
+function renderFill(ex,pct){
+  return `
+  <div class="ls-exercise">
+    <div class="ls-progress-bar"><div class="ls-progress-fill" style="width:${pct}%"></div></div>
+    <div class="ls-step-label">${esc(ex.title||'Complétez')}</div>
+    <div class="ex-question">${esc(ex.prompt||'')}</div>
+    <div class="fill-hint">Indice: ${esc(ex.hint||'')}</div>
+    <input type="text" id="fill-input" class="fill-input" placeholder="Votre réponse..."/>
+    <button class="btn btn-p" onclick="checkFill('${esc(ex.answer||'')}')">Vérifier</button>
+    <div id="ex-feedback" class="ex-feedback"></div>
+  </div>`;
+}
+
+function checkFill(answer){
+  const v=($('fill-input')?.value||'').trim().toLowerCase();
+  const ok=v===answer.toLowerCase();
+  const fb=$('ex-feedback');
+  if(fb) fb.innerHTML=`<div class="${ok?'fb-correct':'fb-wrong'}">
+    ${ok?'✅ Parfait!':'❌ La bonne réponse: '+answer}
+  </div><button class="btn btn-p btn-sm" style="margin-top:12px" onclick="nextLessonStep()">Suivant →</button>`;
+}
+
+function renderListen(ex,pct){
+  return `
+  <div class="ls-exercise">
+    <div class="ls-progress-bar"><div class="ls-progress-fill" style="width:${pct}%"></div></div>
+    <div class="ls-step-label">${esc(ex.title||'Écoutez')}</div>
+    <div class="listen-phrases">
+      ${(ex.phrases||[]).map((p,i)=>`
+      <div class="listen-phrase-row">
+        <div class="listen-phrase-txt">${esc(p)}</div>
+        <div class="listen-phrase-tr">${esc((ex.translations||[])[i]||'')}</div>
+        <button class="listen-speak-btn" onclick="speak('${esc(p)}')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+        </button>
       </div>`).join('')}
     </div>
-    <button class="btn btn-p" style="width:100%;margin-top:14px" onclick="speakSit('${id}')">🎤 Pratiquer le dialogue</button>
+    <button class="btn btn-p ls-next-btn" onclick="nextLessonStep()">Continuer →</button>
   </div>`;
-  openM('m-sit');
-}
-function speakSit(id){
-  const s=SITUATIONS.find(x=>x.id===id); if(!s) return;
-  let i=0;
-  function next(){ if(i<s.lines.length){ speak(s.lines[i].fr); i++; setTimeout(next,2500); } else { toast('Dialogue terminé! 🎉','ok'); } }
-  next();
 }
 
-// ── STORIES ────────────────────────────────────────────────────────
-function renderStories(){
-  const el=$('stories-page'); if(!el) return;
-  el.innerHTML=`
-  <div class="page-header"><h2 class="page-title">📖 Histoires</h2><p class="page-sub">Lecture guidée et progressive</p></div>
-  <div class="stories-grid">
-    ${STORIES.map(s=>`<div class="story-card" onclick="openStory('${s.id}')">
-      <div class="sc-level">${esc(s.level)}</div>
-      <div class="sc-title">${esc(s.title)}</div>
-      <div class="sc-eps">${s.episodes.length} épisodes</div>
+function renderSpeak(ex,pct){
+  return `
+  <div class="ls-exercise">
+    <div class="ls-progress-bar"><div class="ls-progress-fill" style="width:${pct}%"></div></div>
+    <div class="ls-step-label">${esc(ex.title||'Expression orale')}</div>
+    <div class="speak-phrase">${esc(ex.phrase||'')}</div>
+    <div class="speak-translation">${esc(ex.translation||'')}</div>
+    <button class="btn btn-p speak-listen-btn" onclick="speak('${esc(ex.phrase||'')}')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+      Écouter l'exemple
+    </button>
+    <button class="btn btn-o ls-next-btn" onclick="nextLessonStep()">Continuer →</button>
+  </div>`;
+}
+
+// ── Complete Lesson ───────────────────────────────────────────
+function completeLesson(lessonId, xp){
+  const s=getSession();
+  if(!s||!lessonId) return;
+  if(!(s.completedLessons||[]).includes(lessonId)){
+    s.completedLessons=[...(s.completedLessons||[]),lessonId];
+    s.xp=(s.xp||0)+xp;
+    s.lastStudy=Date.now();
+  }
+  saveSession(s);
+  // Sync to users store
+  const users=JSON.parse(localStorage.getItem('lw_users')||'{}');
+  if(users[s.email]){
+    users[s.email].completedLessons=s.completedLessons;
+    users[s.email].xp=s.xp;
+    users[s.email].lastStudy=s.lastStudy;
+    localStorage.setItem('lw_users',JSON.stringify(users));
+  }
+}
+
+// ── WordBook ─────────────────────────────────────────────────
+function openWordbook(lessonId){
+  if(!isWordbookUnlocked(lessonId)){
+    toast('Terminez la leçon pour débloquer le WordBook! 🔒','err'); return;
+  }
+  const parts=lessonId.split('-');
+  const levelId=parts[0]+(parts[1]?'-'+parts[1]:'');
+  const unitNum=parseInt((parts.find(p=>p.startsWith('u'))||'u1').slice(1))||1;
+  const lessonNum=parseInt((parts.find(p=>p.startsWith('l'))||'l1').slice(1))||1;
+  const content=typeof buildLessonContent==='function'
+    ? buildLessonContent(levelId,unitNum,lessonNum)
+    : {title:'WordBook',vocab:[]};
+
+  const box=$('m-wordbook')?.querySelector('.modal-box');
+  if(!box) return;
+
+  box.innerHTML=`
+  <div class="modal-drag-bar"></div>
+  <div class="modal-hdr">
+    <div class="modal-hdr-title">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      WordBook — ${esc(content.title||'')}
+    </div>
+    <button class="modal-close-btn" onclick="closeM('m-wordbook')">✕</button>
+  </div>
+  <div class="wb-meta">Unité ${unitNum} · Leçon ${lessonNum} · ${(content.vocab||[]).length} mots</div>
+  <div class="wb-list">
+    ${(content.vocab||[]).map((w,i)=>`
+    <div class="wb-entry">
+      <div class="wb-entry-num">${i+1}</div>
+      <div class="wb-entry-body">
+        <div class="wb-entry-fr">${esc(w.fr)}</div>
+        <div class="wb-entry-pron">[${esc(w.pron||'')}]</div>
+        <div class="wb-entry-eng">${esc(w.eng)}</div>
+        <div class="wb-entry-ar">${esc(w.ar)}</div>
+        <div class="wb-entry-ex">« ${esc(w.ex||'')} »</div>
+        ${w.note?`<div class="wb-entry-note">💡 ${esc(w.note)}</div>`:''}
+      </div>
+      <button class="wb-entry-speak" onclick="speak('${esc(w.fr)}')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+      </button>
     </div>`).join('')}
   </div>`;
-}
-function openStory(id){
-  const story=STORIES.find(s=>s.id===id); if(!story) return;
-  openM('m-lesson');
-  lessonState={lvId:null,step:0,data:{title:story.title,steps:[
-    {type:'intro',title:story.title,text:`Niveau: ${story.level} · ${story.episodes.length} épisodes`,tip:'📖 Lisez attentivement et mémorisez le vocabulaire!'},
-    ...story.episodes.flatMap(ep=>[
-      {type:'intro',title:`Épisode ${ep.ep}: ${ep.title}`,text:ep.text,tip:`Vocabulaire: ${ep.vocab.map(v=>v.fr).join(', ')}`},
-      {type:'vocab',title:'Vocabulaire de l\'épisode',words:ep.vocab.map(v=>({fr:v.fr,pron:'',meaning:v.meaning,ex:''}))},
-      {type:'exercise',title:`Quiz: ${ep.title}`,question:ep.question,opts:ep.opts,ans:ep.ans,exp:`Relisez l'épisode pour trouver la réponse.`},
-    ]),
-    {type:'summary',title:'Histoire terminée! 📖',points:[`Histoire: ${story.title}`,`Niveau: ${story.level}`,'Vocabulaire acquis!','Continuez avec d\'autres histoires!']},
-  ]}};
-  renderLesStep();
+
+  openM('m-wordbook');
 }
 
-// ── EXPLORE ────────────────────────────────────────────────────────
-function renderExplore(){
-  const el=$('explore-page'); if(!el) return;
-  const wod=WORD_OF_DAY[new Date().getDate()%WORD_OF_DAY.length];
-  const gtip=GRAMMAR_TIPS[Math.floor(Date.now()/604800000)%GRAMMAR_TIPS.length];
-  el.innerHTML=`
-  <div class="page-header"><h2 class="page-title">🔍 Explorer</h2><p class="page-sub">Grammaire, culture et curiosités</p></div>
-
-  <div class="card" style="border-left:3px solid #EAB308">
-    <div class="card-lbl">✨ Mot du jour</div>
-    <div style="display:flex;align-items:center;justify-content:space-between">
-      <div class="card-title">${esc(wod.fr)}</div>
-      <button class="btn-tts" onclick="speak('${esc(wod.fr)}')">🔊</button>
-    </div>
-    <div style="font-size:.78rem;color:var(--txt2)">[${esc(wod.pron)}] · ${esc(wod.type)} · Niveau ${wod.level}</div>
-    <div style="font-size:.88rem;margin:6px 0">${esc(wod.eng)} · ${esc(wod.ar)}</div>
-    <div style="font-size:.84rem;color:var(--cr);font-style:italic">"${esc(wod.ex)}"</div>
-    <div style="font-size:.76rem;color:var(--txt3);margin-top:6px">💡 ${esc(wod.note)}</div>
-  </div>
-
-  <div class="card" style="border-left:3px solid var(--cr)">
-    <div class="card-lbl">📐 Règle de grammaire de la semaine</div>
-    <div class="card-title">${esc(gtip.topic)}</div>
-    <p style="font-size:.84rem;color:var(--txt2);margin:10px 0 12px;line-height:1.6">${esc(gtip.rule)}</p>
-    <div style="margin-bottom:12px">
-      ${gtip.examples.map(ex=>`<div style="background:var(--bg2);border-radius:var(--rs);padding:8px 12px;margin-bottom:6px;font-size:.82rem;font-style:italic">"${esc(ex)}"</div>`).join('')}
-    </div>
-    <button class="btn btn-p btn-sm" onclick="startGrammarTest()">📝 Faire le test →</button>
-  </div>
-
-  <div class="card">
-    <div class="card-lbl">🇫🇷 Culture Française</div>
-    ${[
-      {t:'La gastronomie',d:'La France est célèbre dans le monde entier pour sa cuisine raffinée. Le pain, le vin, le fromage et les pâtisseries sont des éléments essentiels de l\'identité française.',ic:'🥐'},
-      {t:'L\'art de vivre',d:'Les Français accordent une grande importance à la qualité de vie: les repas en famille, les cafés, les promenades... Le concept de "savoir-vivre" est unique.',ic:'☕'},
-      {t:'La langue française',d:'Le français est l\'une des langues les plus étudiées au monde. Avec 300 millions de locuteurs dans 50 pays, c\'est la seule langue parlée sur les cinq continents.',ic:'🌍'},
-    ].map(c=>`<div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--bdr)">
-      <span style="font-size:1.5rem">${c.ic}</span>
-      <div><div style="font-weight:600;font-size:.88rem;margin-bottom:4px">${esc(c.t)}</div><div style="font-size:.8rem;color:var(--txt2);line-height:1.5">${esc(c.d)}</div></div>
-    </div>`).join('')}
-  </div>
-
-  <div class="card">
-    <div class="card-lbl">✍️ Exercice d\'Écriture</div>
-    <div class="card-title">Pratiquez l\'écriture</div>
-    <p style="font-size:.84rem;color:var(--txt2);margin:8px 0">Décrivez votre journée en français (5-10 phrases)</p>
-    <textarea id="writing-area" class="write-area" placeholder="Aujourd'hui, je..."></textarea>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="btn btn-p btn-sm" onclick="checkWriting()">✓ Vérifier</button>
-      <button class="btn btn-g btn-sm" onclick="$('writing-area').value=''">Effacer</button>
-    </div>
-    <div id="writing-fb" style="margin-top:8px"></div>
-  </div>`;
-}
-function startGrammarTest(){ startGrammarDrill(); }
-function checkWriting(){
-  const val=($('writing-area')?.value||'').trim();
-  const fb=$('writing-fb');
-  if(!val){ if(fb) fb.innerHTML=`<div class="fb-err">Écrivez quelque chose d\'abord!</div>`; return; }
-  const wordCount=val.split(/\s+/).length;
-  if(fb) fb.innerHTML=`<div class="fb-ok">✅ Bien! ${wordCount} mots. Continuez à pratiquer chaque jour! +20 XP</div>`;
-  xpToast(20);
-}
-
-// ── PROGRESS ───────────────────────────────────────────────────────
+// ── Progress Page ─────────────────────────────────────────────
 function renderProgress(){
-  const el=$('progress-page'); if(!el) return;
-  const user=authGetCurrent();
-  const done=user?.completedLevels?.length||0;
-  const tier=getTier(user?.xp||0);
+  const el=$('page-progress');
+  if(!el) return;
+  const s=getSession();
+  if(!s){ el.innerHTML='<div class="center-msg">Connectez-vous pour voir vos progrès.</div>'; return; }
+
+  const total=300;
+  const done=(s.completedLessons||[]).length;
+  const pct=Math.round(done/total*100);
+  const levels=['pre-a1','a1','a2','b1','b2','c1'];
+  const levelData=levels.map(lv=>{
+    const d=(s.completedLessons||[]).filter(id=>id.startsWith(lv+'-')).length;
+    return {id:lv,done:d,total:50,pct:Math.round(d/50*100)};
+  });
+
+  const daysStudied=s.lastStudy?Math.ceil((Date.now()-s.joinedAt)/(86400000)):0;
+  const avgPerDay=daysStudied>0?Math.round(done/daysStudied*10)/10:0;
+  const onTrack=avgPerDay>=1;
+
   el.innerHTML=`
-  <div class="page-header"><h2 class="page-title">📊 Mes Statistiques</h2></div>
+  <div class="progress-page">
+    <div class="progress-page-hdr"><h2>Ma Progression</h2></div>
 
-  <div class="card" style="text-align:center">
-    <div style="font-size:3rem;margin-bottom:8px">${tier.icon}</div>
-    <div style="font-family:var(--ffs);font-size:1.6rem;font-weight:700;color:${tier.color}">${tier.name}</div>
-    <div style="font-size:2rem;font-weight:800;color:var(--cr);margin:8px 0">${user?.xp||0} XP</div>
-    <div class="tier-bar" style="margin:0 auto;max-width:200px"><div class="tier-fill" style="width:${Math.round(((user?.xp||0)-tier.min)/(tier.max-tier.min)*100)}%;background:${tier.color}"></div></div>
-    <div style="font-size:.78rem;color:var(--txt3);margin-top:6px">${tier.max-tier.min} XP pour le prochain niveau</div>
-  </div>
+    <!-- Overall ring -->
+    <div class="overall-ring-wrap">
+      <svg class="overall-ring" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r="50" fill="none" stroke="#ffffff15" stroke-width="10"/>
+        <circle cx="60" cy="60" r="50" fill="none" stroke="#D62828" stroke-width="10"
+          stroke-dasharray="${pct*3.14} 314" stroke-linecap="round" transform="rotate(-90 60 60)"/>
+      </svg>
+      <div class="overall-ring-txt">
+        <div class="overall-pct">${pct}%</div>
+        <div class="overall-lbl">Complété</div>
+      </div>
+    </div>
 
-  <div class="stats-strip">
-    <div class="stat-box"><div class="stat-v">${done}</div><div class="stat-l">Niveaux</div></div>
-    <div class="stat-box"><div class="stat-v">${done*6}</div><div class="stat-l">Leçons</div></div>
-    <div class="stat-box"><div class="stat-v">${user?.streak||0}🔥</div><div class="stat-l">Jours</div></div>
-    <div class="stat-box"><div class="stat-v">${user?.savedWords?.length||0}</div><div class="stat-l">Mots</div></div>
-  </div>
+    <!-- Stats grid -->
+    <div class="prog-stats-grid">
+      <div class="prog-stat"><div class="prog-stat-val">${done}</div><div class="prog-stat-lbl">Leçons</div></div>
+      <div class="prog-stat"><div class="prog-stat-val">${s.xp||0}</div><div class="prog-stat-lbl">XP Total</div></div>
+      <div class="prog-stat"><div class="prog-stat-val">${s.streak||0}j</div><div class="prog-stat-lbl">Série</div></div>
+      <div class="prog-stat"><div class="prog-stat-val">${total-done}</div><div class="prog-stat-lbl">Restant</div></div>
+    </div>
 
-  <div class="card">
-    <div class="card-lbl">🗺️ Progression par niveau</div>
-    ${renderRoadmapMini()}
-  </div>
+    <!-- Analysis -->
+    <div class="analysis-card ${onTrack?'analysis-good':'analysis-warn'}">
+      <div class="analysis-icon">${onTrack?'🚀':'💪'}</div>
+      <div class="analysis-txt">
+        <div class="analysis-title">${onTrack?'Excellente progression!':'Continuez vos efforts!'}</div>
+        <div class="analysis-desc">${onTrack
+          ?`Vous étudiez en moyenne ${avgPerDay} leçon/jour. Continuez ainsi!`
+          :`Essayez de faire au moins 1 leçon par jour pour progresser régulièrement.`
+        }</div>
+      </div>
+    </div>
 
-  <div class="card">
-    <div class="card-lbl">🏆 Badges</div>
-    <div class="badges-grid">
-      ${[
-        {ic:'🌱',nm:'Premier Pas',       cond:done>=1},
-        {ic:'📚',nm:'10 Niveaux',        cond:done>=10},
-        {ic:'🔥',nm:'7 Jours de Suite',  cond:(user?.streak||0)>=7},
-        {ic:'💎',nm:'1000 XP',           cond:(user?.xp||0)>=1000},
-        {ic:'🏆',nm:'Tous les Niveaux',  cond:done>=30},
-        {ic:'🌍',nm:'Explorateur',       cond:done>=5},
-      ].map(b=>`<div class="badge${b.cond?'':' locked'}"><div class="badge-ic">${b.ic}</div><div class="badge-nm">${b.nm}</div></div>`).join('')}
+    <!-- Per-level bars -->
+    <div class="prog-levels-title">Progression par niveau</div>
+    ${levelData.map(lv=>`
+    <div class="prog-level-row">
+      <div class="prog-level-name">${lv.id.toUpperCase()}</div>
+      <div class="prog-level-bar-wrap">
+        <div class="prog-level-bar"><div class="prog-level-fill" style="width:${lv.pct}%"></div></div>
+      </div>
+      <div class="prog-level-count">${lv.done}/50</div>
+    </div>`).join('')}
+
+    <!-- Certificates -->
+    <div class="certs-section">
+      <div class="certs-title">🏆 Certificats</div>
+      ${levels.map(lv=>{
+        const lvDone=(s.completedLessons||[]).filter(id=>id.startsWith(lv+'-')).length;
+        const earned=lvDone>=50;
+        return `<div class="cert-row ${earned?'cert-earned':'cert-locked'}">
+          <span>${earned?'🏅':'🔒'} Certificat ${lv.toUpperCase()}</span>
+          ${earned?`<button class="btn btn-sm btn-o" onclick="toast('Certificat ${lv.toUpperCase()} téléchargé!','ok')">Télécharger</button>`:'<span class="cert-remain">${50-lvDone} leçons restantes</span>'}
+        </div>`;
+      }).join('')}
     </div>
   </div>`;
 }
 
-// ── SETTINGS ───────────────────────────────────────────────────────
+// ── Profile Page ──────────────────────────────────────────────
+function renderProfile(){
+  const el=$('page-profile');
+  if(!el) return;
+  const s=getSession();
+  if(!s){ el.innerHTML='<div class="center-msg">Connectez-vous pour voir votre profil.</div>'; return; }
+
+  const total=300;
+  const done=(s.completedLessons||[]).length;
+  const pct=Math.round(done/total*100);
+  const daysStudied=s.joinedAt?Math.ceil((Date.now()-s.joinedAt)/86400000):1;
+  const avgPerDay=Math.round(done/daysStudied*10)/10;
+
+  el.innerHTML=`
+  <div class="profile-page">
+    <div class="profile-avatar-wrap">
+      <div class="profile-avatar">${(s.name||'U')[0].toUpperCase()}</div>
+      <div class="profile-name">${esc(s.name||'')}</div>
+      <div class="profile-email">${esc(s.email||'')}</div>
+      <div class="profile-level-badge">${(s.level||'Pre-A1').toUpperCase()}</div>
+    </div>
+
+    <div class="profile-info-grid">
+      <div class="profile-info-row">
+        <span class="profile-info-lbl">Membre depuis</span>
+        <span class="profile-info-val">${s.joinedAt?new Date(s.joinedAt).toLocaleDateString('fr-FR'):'—'}</span>
+      </div>
+      <div class="profile-info-row">
+        <span class="profile-info-lbl">XP Total</span>
+        <span class="profile-info-val">${s.xp||0} XP</span>
+      </div>
+      <div class="profile-info-row">
+        <span class="profile-info-lbl">Leçons complétées</span>
+        <span class="profile-info-val">${done} / ${total}</span>
+      </div>
+      <div class="profile-info-row">
+        <span class="profile-info-lbl">Série actuelle</span>
+        <span class="profile-info-val">${s.streak||0} jours 🔥</span>
+      </div>
+      <div class="profile-info-row">
+        <span class="profile-info-lbl">Moyenne / jour</span>
+        <span class="profile-info-val">${avgPerDay} leçons</span>
+      </div>
+    </div>
+
+    <!-- Progress overview -->
+    <div class="profile-progress-wrap">
+      <div class="profile-pct-label">Progression globale: ${pct}%</div>
+      <div class="profile-pct-bar"><div class="profile-pct-fill" style="width:${pct}%"></div></div>
+    </div>
+
+    <!-- AI Analysis -->
+    <div class="profile-analysis">
+      <div class="profile-analysis-title">📊 Analyse personnalisée</div>
+      <div class="profile-analysis-body">
+        ${pct<10?'Vous êtes au début de votre voyage. Faites au moins une leçon par jour!':
+          pct<30?`Bonne progression! Vous avancez bien. Continuez sur cette lancée.`:
+          pct<60?`Excellent! Vous êtes à mi-chemin. Ne lâchez pas!`:
+          pct<90?`Impressionnant! Vous maîtrisez déjà beaucoup de français.`:
+          `Félicitations! Vous êtes presque expert en français! 🎉`}
+        ${avgPerDay>=1?' Votre rythme est excellent.':' Essayez d\'augmenter votre rythme d\'étude.'}
+      </div>
+    </div>
+
+    <!-- Certificates earned -->
+    <div class="profile-certs">
+      <div class="profile-certs-title">🏆 Certificats obtenus</div>
+      ${['pre-a1','a1','a2','b1','b2','c1'].map(lv=>{
+        const lvDone=(s.completedLessons||[]).filter(id=>id.startsWith(lv+'-')).length;
+        if(lvDone<50) return '';
+        return `<div class="cert-earned-card">🏅 Certificat ${lv.toUpperCase()}</div>`;
+      }).join('')||'<div class="no-certs">Aucun certificat encore. Terminez un niveau complet!</div>'}
+    </div>
+
+    <div class="profile-actions">
+      <button class="btn btn-o" onclick="openEditProfile()">✏️ Modifier le profil</button>
+      <button class="btn btn-err" onclick="doLogout()">Se déconnecter</button>
+    </div>
+  </div>`;
+}
+
+function openEditProfile(){
+  const s=getSession();
+  if(!s) return;
+  const box=$('m-editprofile')?.querySelector('.modal-box');
+  if(!box) return;
+  box.innerHTML=`
+  <div class="modal-drag-bar"></div>
+  <div class="modal-hdr">
+    <div class="modal-hdr-title">✏️ Modifier le profil</div>
+    <button class="modal-close-btn" onclick="closeM('m-editprofile')">✕</button>
+  </div>
+  <div class="edit-profile-form">
+    <label class="field-label">Nom</label>
+    <input id="ep-name" class="field-input" value="${esc(s.name||'')}"/>
+    <label class="field-label">Nouveau mot de passe (laisser vide = inchangé)</label>
+    <input id="ep-pass" class="field-input" type="password" placeholder="••••••"/>
+    <button class="btn btn-p" onclick="saveEditProfile()">Sauvegarder</button>
+  </div>`;
+  openM('m-editprofile');
+}
+
+function saveEditProfile(){
+  const s=getSession();
+  if(!s) return;
+  const name=($('ep-name')?.value||'').trim();
+  const pw=$('ep-pass')?.value||'';
+  if(name) s.name=name;
+  if(pw.length>=6) s.password=btoa(pw);
+  saveSession(s);
+  const users=JSON.parse(localStorage.getItem('lw_users')||'{}');
+  if(users[s.email]){
+    if(name) users[s.email].name=name;
+    if(pw.length>=6) users[s.email].password=btoa(pw);
+    localStorage.setItem('lw_users',JSON.stringify(users));
+  }
+  closeM('m-editprofile');
+  toast('Profil mis à jour!','ok');
+  renderProfile();
+}
+
+// ── Settings Page ─────────────────────────────────────────────
 function renderSettings(){
-  const el=$('settings-page'); if(!el) return;
-  const user=authGetCurrent();
-  const s=user?.settings||{};
-  el.innerHTML=`
-  <div class="page-header"><h2 class="page-title">⚙️ Paramètres</h2></div>
+  const el=$('page-settings');
+  if(!el) return;
+  const s=getSession();
 
-  ${user?`<div class="card">
-    <div class="card-lbl">👤 Profil</div>
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
-      <div class="avatar-big">${user.avatar||'?'}</div>
-      <div><div style="font-size:1.1rem;font-weight:700">${esc(user.name)}</div><div style="font-size:.82rem;color:var(--txt2)">${esc(user.email)}</div></div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div style="text-align:center;background:var(--bg2);border-radius:var(--rs);padding:12px"><div style="font-size:1.2rem;font-weight:700;color:var(--cr)">${user.xp||0}</div><div style="font-size:.7rem;color:var(--txt3)">XP Total</div></div>
-      <div style="text-align:center;background:var(--bg2);border-radius:var(--rs);padding:12px"><div style="font-size:1.2rem;font-weight:700;color:var(--cr)">${user.completedLevels?.length||0}</div><div style="font-size:.7rem;color:var(--txt3)">Niveaux</div></div>
-    </div>
-    <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <label style="font-size:.88rem">Modifier le nom</label>
-        <input type="text" id="new-name" value="${esc(user.name)}" class="fill-inp" style="max-width:160px;padding:6px 10px"/>
+  el.innerHTML=`
+  <div class="settings-page">
+    <div class="settings-hdr"><h2>Paramètres</h2></div>
+    <div class="settings-grid">
+
+      <div class="settings-card" onclick="openSettingsSection('features')">
+        <div class="settings-card-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D62828" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        </div>
+        <div class="settings-card-info">
+          <div class="settings-card-title">Fonctionnalités</div>
+          <div class="settings-card-desc">Guide complet de toutes les fonctions</div>
+        </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
       </div>
-      <button class="btn btn-o btn-sm" onclick="saveName()">Sauvegarder</button>
+
+      <div class="settings-card" onclick="openSettingsSection('language')">
+        <div class="settings-card-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D62828" stroke-width="2"><path d="M5 8l6 6m-6 0l6-6M19 5h-7m7 0a2 2 0 010 4h-7"/></svg>
+        </div>
+        <div class="settings-card-info">
+          <div class="settings-card-title">Langue de l'interface</div>
+          <div class="settings-card-desc">العربية / English</div>
+        </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+
+      <div class="settings-card" onclick="openSettingsSection('notifications')">
+        <div class="settings-card-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D62828" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </div>
+        <div class="settings-card-info">
+          <div class="settings-card-title">Rappels quotidiens</div>
+          <div class="settings-card-desc">Gardez votre série active</div>
+        </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+
+      <div class="settings-card" onclick="openSettingsSection('goal')">
+        <div class="settings-card-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D62828" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <div class="settings-card-info">
+          <div class="settings-card-title">Objectif journalier</div>
+          <div class="settings-card-desc">${s?.settings?.dailyGoal||10} min par jour</div>
+        </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+
+      <div class="settings-card" onclick="openSettingsSection('about')">
+        <div class="settings-card-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D62828" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
+        </div>
+        <div class="settings-card-info">
+          <div class="settings-card-title">À propos</div>
+          <div class="settings-card-desc">Languway French v6.0</div>
+        </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+
     </div>
-  </div>`:''}
-
-  <div class="card">
-    <div class="card-lbl">🎨 Apparence</div>
-    <div class="set-row"><span>Mode sombre</span><label class="tog"><input type="checkbox" ${s.darkMode||darkMode?'checked':''} onchange="toggleDark(this.checked)"/><span class="tog-sl"></span></label></div>
-    <div class="set-row"><span>Taille du texte: <strong>${s.fontSize||16}px</strong></span></div>
-    <input type="range" min="13" max="21" value="${s.fontSize||16}" class="range-inp" oninput="setFS(this.value)"/>
-  </div>
-
-  <div class="card">
-    <div class="card-lbl">🔊 Audio</div>
-    <div class="set-row"><span>Vitesse de synthèse vocale: <strong>${s.speechRate||0.9}x</strong></span></div>
-    <input type="range" min="0.5" max="1.5" step="0.1" value="${s.speechRate||0.9}" class="range-inp" oninput="setSR(this.value)"/>
-    <div class="set-row"><span>Lecture auto des mots</span><label class="tog"><input type="checkbox" ${s.autoPlay?'checked':''} onchange="toggleAutoPlay(this.checked)"/><span class="tog-sl"></span></label></div>
-  </div>
-
-  <div class="card">
-    <div class="card-lbl">🌍 Langue & Dialecte</div>
-    <div class="set-row"><span>Langue de l\'interface</span>
-      <select class="wb-filter" onchange="setUiLang(this.value)">
-        <option value="fr" ${(s.uiLang||'fr')==='fr'?'selected':''}>Français</option>
-        <option value="en" ${(s.uiLang||'fr')==='en'?'selected':''}>English</option>
-        <option value="ar" ${(s.uiLang||'fr')==='ar'?'selected':''}>العربية</option>
-      </select>
-    </div>
-    <div class="set-row"><span>Dialecte français</span>
-      <select class="wb-filter" onchange="setDialect(this.value)">
-        <option value="fr" ${(s.dialect||'fr')==='fr'?'selected':''}>France (Standard)</option>
-        <option value="ca" ${(s.dialect||'fr')==='ca'?'selected':''}>Canada (Québec)</option>
-        <option value="be" ${(s.dialect||'fr')==='be'?'selected':''}>Belgique</option>
-        <option value="ch" ${(s.dialect||'fr')==='ch'?'selected':''}>Suisse</option>
-      </select>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-lbl">🎯 Objectif d\'apprentissage</div>
-    ${[
-      {v:'travel',l:'🌍 Voyages'},
-      {v:'work',l:'💼 Travail'},
-      {v:'culture',l:'🎭 Culture'},
-      {v:'general',l:'📚 Général'},
-      {v:'family',l:'👨‍👩‍👧 Famille'},
-      {v:'business',l:'📈 Affaires'},
-    ].map(g=>`<div class="goal-opt${user?.goal===g.v?' active':''}" onclick="setGoal('${g.v}')">${g.l}</div>`).join('')}
-  </div>
-
-  <div class="card">
-    <div class="card-lbl">⏰ Rappels quotidiens</div>
-    <div class="set-row"><span>Activer les rappels</span><label class="tog"><input type="checkbox" ${s.notifications?'checked':''} onchange="toggleNotif(this.checked)"/><span class="tog-sl"></span></label></div>
-    <div class="set-row"><span>Heure de rappel</span>
-      <input type="time" value="08:00" class="fill-inp" style="max-width:100px;padding:6px 10px"/>
-    </div>
-    <div class="set-row"><span>Objectif XP quotidien</span>
-      <select class="wb-filter">
-        <option>50 XP</option><option selected>100 XP</option><option>200 XP</option><option>500 XP</option>
-      </select>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-lbl">💾 Données</div>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <button class="btn btn-o btn-sm" onclick="exportData()">📤 Exporter mes données</button>
-      <button class="btn btn-o btn-sm" onclick="importData()">📥 Importer des données</button>
-      <button class="btn btn-g btn-sm" onclick="confirmReset()" style="color:#DC2626">🗑️ Réinitialiser la progression</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-lbl">📱 Application</div>
-    <div id="install-wrap">
-      <button class="btn btn-p" id="install-btn" style="display:none;width:100%" onclick="doInstall()">📲 Installer l\'app</button>
-    </div>
-    <div style="font-size:.78rem;color:var(--txt3);margin-top:8px;text-align:center">Version 4.0 · Languway French</div>
-  </div>
-
-  ${user?`<div style="margin-top:16px"><button class="btn btn-g" style="width:100%;color:#DC2626" onclick="doLogout()">🚪 Se déconnecter</button></div>`:''}
-  `;
-
-  if(window._installPrompt){ const btn=$('install-btn'); if(btn) btn.style.display='flex'; }
-}
-function saveName(){ const v=($('new-name')?.value||'').trim(); if(v){ authUpdateUser({name:v,avatar:v.charAt(0).toUpperCase()}); toast('Nom mis à jour!','ok'); renderSettings(); } }
-function toggleDark(v){ darkMode=v; document.body.classList.toggle('dark',v); authUpdateUser({settings:{...authGetCurrent()?.settings,darkMode:v}}); }
-function setFS(v){ document.documentElement.style.fontSize=v+'px'; authUpdateUser({settings:{...authGetCurrent()?.settings,fontSize:parseFloat(v)}}); renderSettings(); }
-function setSR(v){ authUpdateUser({settings:{...authGetCurrent()?.settings,speechRate:parseFloat(v)}}); renderSettings(); }
-function setUiLang(v){ authUpdateUser({settings:{...authGetCurrent()?.settings,uiLang:v}}); toast('Langue mise à jour!','ok'); }
-function setDialect(v){ authUpdateUser({settings:{...authGetCurrent()?.settings,dialect:v}}); toast('Dialecte mis à jour!','ok'); }
-function setGoal(v){ authUpdateUser({goal:v}); toast('Objectif mis à jour!','ok'); renderSettings(); }
-function toggleAutoPlay(v){ authUpdateUser({settings:{...authGetCurrent()?.settings,autoPlay:v}}); }
-function toggleNotif(v){ authUpdateUser({settings:{...authGetCurrent()?.settings,notifications:v}}); }
-function exportData(){ const a=document.createElement('a');a.href='data:text/json,'+encodeURIComponent(JSON.stringify(authGetCurrent(),null,2));a.download='languway-backup.json';a.click(); }
-function importData(){ const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=e=>{ const r=new FileReader();r.onload=ev=>{ try{ const d=JSON.parse(ev.target.result);authUpdateUser(d);toast('Données importées!','ok');renderSettings();}catch(e){toast('Fichier invalide','err');}}; r.readAsText(e.target.files[0]);}; inp.click(); }
-function confirmReset(){ if(confirm('Réinitialiser TOUTE la progression? Cette action est irréversible.')){ localStorage.clear(); location.reload(); } }
-
-// ── ABOUT ──────────────────────────────────────────────────────────
-function renderAbout(){
-  const el=$('about-page'); if(!el) return;
-  el.innerHTML=`
-  <div class="page-header"><h2 class="page-title">ℹ️ À Propos</h2></div>
-  <div class="card" style="text-align:center">
-    <div style="width:72px;height:72px;border-radius:18px;background:var(--cr);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:2rem">🇫🇷</div>
-    <div style="font-family:var(--ffs);font-size:1.6rem;font-weight:700;margin-bottom:4px">Languway <span style="color:var(--cr)">French</span></div>
-    <div style="font-size:.78rem;letter-spacing:3px;color:var(--txt3);text-transform:uppercase;margin-bottom:16px">Apprenez le français</div>
-    <p style="font-size:.84rem;color:var(--txt2);line-height:1.7">Languway French est une application d\'apprentissage complète qui vous guide du niveau débutant absolu (Pré-A1) jusqu\'à la maîtrise (C2) à travers 30 niveaux structurés selon le Cadre Européen Commun de Référence (CECR).</p>
-  </div>
-  <div class="card">
-    <div class="card-lbl">✨ Fonctionnalités</div>
-    ${['30 niveaux CECR (Pré-A1 → C2)','180+ leçons interactives','Situations réelles de la vie quotidienne','Histoires progressives animées','Dictionnaire de 20+ mots avec synonymes','Entraînement: Flashcards, Quiz, Écoute','Synthèse vocale en français natif','Comptes utilisateurs avec synchronisation','Mode sombre et personnalisation complète','Application installable (PWA)'].map(f=>`<div class="about-feat">✅ ${f}</div>`).join('')}
   </div>`;
 }
 
-// ── SHARE ──────────────────────────────────────────────────────────
-function renderShare(){
-  const el=$('share-page'); if(!el) return;
-  const url='https://2009malek11-source.github.io/languway-French/';
-  el.innerHTML=`
-  <div class="page-header"><h2 class="page-title">📲 Partager</h2></div>
-  <div class="card" style="text-align:center">
-    <div style="font-size:1.1rem;font-weight:600;margin-bottom:16px">Partagez Languway French!</div>
-    <div style="background:var(--bg2);border-radius:var(--rs);padding:12px;font-size:.82rem;word-break:break-all;margin-bottom:16px;font-family:monospace">${url}</div>
-    <div id="qr-wrap" style="margin:16px auto;width:200px;height:200px;background:#fff;border-radius:12px;display:flex;align-items:center;justify-content:center;border:2px solid var(--bdr)">
-      <canvas id="qr-canvas" width="180" height="180"></canvas>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:16px">
-      <button class="btn btn-p btn-sm" onclick="shareNative()">📤 Partager</button>
-      <button class="btn btn-o btn-sm" onclick="navigator.clipboard.writeText('${url}').then(()=>toast('Copié!','ok'))">📋 Copier le lien</button>
-    </div>
-  </div>
-  <div class="card">
-    <div class="card-lbl">📲 Installer l\'Application</div>
-    <div class="install-steps">
-      ${[['📱','iOS','Ouvrez dans Safari → Partager → Sur l\'écran d\'accueil'],['🤖','Android','Ouvrez dans Chrome → Menu → Ajouter à l\'écran d\'accueil'],['💻','Desktop','Ouvrez dans Chrome → icône ⊕ dans la barre d\'adresse']].map(s=>`<div class="install-step"><span>${s[0]}</span><div><strong>${s[1]}</strong><br><small>${s[2]}</small></div></div>`).join('')}
-    </div>
-    <button class="btn btn-p" id="install-btn2" style="display:none;width:100%;margin-top:12px" onclick="doInstall()">📲 Installer maintenant</button>
-  </div>`;
-  setTimeout(()=>buildQR(url),100);
-  if(window._installPrompt){ const btn=$('install-btn2'); if(btn) btn.style.display='flex'; }
-}
-function buildQR(url){
-  const c=$('qr-canvas'); if(!c) return;
-  const ctx=c.getContext('2d'); if(!ctx) return;
-  ctx.fillStyle='#fff'; ctx.fillRect(0,0,180,180);
-  ctx.fillStyle='#B91C1C'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center';
-  ctx.fillText('Languway French',90,96); ctx.fillText('Scanner pour accéder',90,112);
-  ctx.fillStyle='#1C1917'; ctx.fillRect(10,10,30,30); ctx.fillStyle='#fff'; ctx.fillRect(14,14,22,22); ctx.fillStyle='#1C1917'; ctx.fillRect(18,18,14,14);
-  ctx.fillStyle='#1C1917'; ctx.fillRect(140,10,30,30); ctx.fillStyle='#fff'; ctx.fillRect(144,14,22,22); ctx.fillStyle='#1C1917'; ctx.fillRect(148,18,14,14);
-  ctx.fillStyle='#1C1917'; ctx.fillRect(10,140,30,30); ctx.fillStyle='#fff'; ctx.fillRect(14,144,22,22); ctx.fillStyle='#1C1917'; ctx.fillRect(18,148,14,14);
-}
-function shareNative(){
-  if(navigator.share){ navigator.share({title:'Languway French',text:'Apprenez le français gratuitement!',url:'https://2009malek11-source.github.io/languway-French/'}); }
-  else { navigator.clipboard?.writeText('https://2009malek11-source.github.io/languway-French/'); toast('Lien copié!','ok'); }
-}
+function openSettingsSection(section){
+  const box=$('m-settings-detail')?.querySelector('.modal-box');
+  if(!box) return;
 
-// ── TRANSLATOR ─────────────────────────────────────────────────────
-function openTranslator(){
-  const box=$('m-trans')?.querySelector('.modal-box'); if(!box) return;
+  const content = {
+    features: renderFeaturesGuide(),
+    language: renderLanguageSetting(),
+    notifications: renderNotificationsSetting(),
+    goal: renderGoalSetting(),
+    about: renderAboutPage(),
+  }[section] || '';
+
   box.innerHTML=`
-  <div class="les-top">
-    <button class="btn-ic" onclick="closeM('m-trans')">✕</button>
-    <div style="flex:1;text-align:center;font-weight:600">🔤 Traducteur</div>
+  <div class="modal-drag-bar"></div>
+  <div class="modal-hdr">
+    <button class="back-btn" onclick="closeM('m-settings-detail')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+    </button>
+    <div class="modal-hdr-title">${getSettingTitle(section)}</div>
     <div style="width:36px"></div>
   </div>
-  <div style="padding:16px">
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <button class="btn btn-sm ${tDir==='fr-en'?'btn-p':'btn-o'}" onclick="setTDir('fr-en')">🇫🇷 → 🌍</button>
-      <button class="btn btn-sm ${tDir==='en-fr'?'btn-p':'btn-o'}" onclick="setTDir('en-fr')">🌍 → 🇫🇷</button>
-      <button class="btn btn-ic" onclick="swapT()" title="Inverser">↔</button>
-    </div>
-    <textarea id="tr-inp" class="write-area" placeholder="${tDir==='fr-en'?'Entrez du texte en français...':'Enter text to translate...'}" rows="3"></textarea>
-    <button class="btn btn-p" style="width:100%;margin-top:8px" onclick="doTranslate()">Traduire</button>
-    <div id="tr-out" style="margin-top:12px"></div>
-    <div style="margin-top:16px">
-      <div style="font-size:.74rem;font-weight:700;color:var(--txt3);margin-bottom:8px;letter-spacing:.5px">TRADUCTIONS RAPIDES</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
-        ${['Bonjour','Merci','Au revoir','S\'il vous plaît','Comment allez-vous?','Je ne comprends pas.','Où est...?','Combien ça coûte?'].map(p=>`<button class="dd-word" onclick="quickTrans('${esc(p)}')">${esc(p)}</button>`).join('')}
+  <div class="settings-detail-body">${content}</div>`;
+
+  openM('m-settings-detail');
+}
+
+function getSettingTitle(s){
+  return {features:'📋 Guide des Fonctionnalités',language:'🌍 Langue',notifications:'🔔 Notifications',goal:'🎯 Objectif',about:'ℹ️ À propos'}[s]||'Paramètres';
+}
+
+// ── Features Guide (قسم الميزات) ─────────────────────────────
+function renderFeaturesGuide(){
+  return `
+  <div class="features-guide">
+
+    <div class="fg-intro">
+      <div class="fg-intro-icon">📚</div>
+      <div class="fg-intro-txt">
+        <strong>Bienvenue dans le Guide Complet</strong><br/>
+        Tout ce que vous devez savoir pour utiliser Languway French au maximum.
       </div>
     </div>
-  </div>`;
-  openM('m-trans');
-}
-function setTDir(d){ tDir=d; openTranslator(); }
-function swapT(){ tDir=tDir==='fr-en'?'en-fr':'fr-en'; openTranslator(); }
-async function doTranslate(){
-  const txt=($('tr-inp')?.value||'').trim();
-  if(!txt) return;
-  const out=$('tr-out');
-  if(out) out.innerHTML=`<div style="color:var(--txt3);font-size:.84rem">⏳ Traduction...</div>`;
-  try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:400,messages:[{role:'user',content:`Translate this text. Direction: ${tDir==='fr-en'?'French to English AND also Arabic':'English/Arabic to French'}.\nText: "${txt}"\n\nRespond in this exact format:\nTranslation: [translation]\nAlternative: [alternative meaning if any]\nNote: [grammar or usage note]\nPronunciation: [pronunciation if French output]`}]})
-    });
-    const data=await resp.json();
-    const result=(data.content?.[0]?.text||'').trim();
-    if(out) out.innerHTML=`<div class="trans-result">${result.replace(/\n/g,'<br>')}</div><button class="btn-tts" onclick="speak('${esc(txt)}','${tDir==='fr-en'?'fr-FR':'en-US'}')">🔊 Écouter</button>`;
-  }catch(e){
-    if(out) out.innerHTML=`<div class="fb-err">Erreur de traduction. Vérifiez votre connexion.</div>`;
-  }
-}
-function quickTrans(phrase){ const inp=$('tr-inp'); if(inp){ inp.value=phrase; doTranslate(); } }
 
-// ── AI TUTOR ───────────────────────────────────────────────────────
-function openAI(){
-  const box=$('m-ai')?.querySelector('.modal-box'); if(!box) return;
-  box.innerHTML=`
-  <div class="les-top">
-    <button class="btn-ic" onclick="closeM('m-ai')">✕</button>
-    <div style="flex:1;text-align:center;font-weight:600">🤖 Tuteur IA</div>
-    <div style="width:36px"></div>
-  </div>
-  <div id="ai-msgs" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px">
-    <div class="ai-msg ai-bot">Bonjour! Je suis votre tuteur de français. Posez-moi des questions sur la grammaire, le vocabulaire, la conjugaison, ou demandez-moi de vous expliquer n\'importe quel concept en français! 🇫🇷</div>
-  </div>
-  <div class="ai-input-row">
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-      ${['Explique le subjonctif','Comment conjuguer "aller"?','Différence entre "bon" et "bien"','Donne-moi des exemples de passé composé'].map(q=>`<button class="dd-word" onclick="askAI('${esc(q)}')">${esc(q)}</button>`).join('')}
+    <!-- Feature 1: Lessons -->
+    <div class="fg-feature">
+      <div class="fg-feature-hdr">
+        <div class="fg-feature-icon" style="background:#D62828">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/></svg>
+        </div>
+        <div>
+          <div class="fg-feature-name">Leçons (Lessons)</div>
+          <div class="fg-feature-tag">Fonctionnalité principale</div>
+        </div>
+      </div>
+      <div class="fg-feature-body">
+        <div class="fg-section-title">📖 Description</div>
+        <p>Le cœur de Languway French. 300 leçons organisées en 6 niveaux (Pre-A1 → C1), chacun contenant 10 unités de 5 leçons.</p>
+
+        <div class="fg-section-title">🎮 Comment utiliser</div>
+        <ol class="fg-steps">
+          <li>Allez dans <strong>Home</strong> → cliquez sur votre niveau dans "Learning Path"</li>
+          <li>Choisissez une <strong>Unité</strong> (1 à 10)</li>
+          <li>Cliquez sur une <strong>Leçon débloquée</strong> (flèche verte)</li>
+          <li>Suivez les étapes: Introduction → Vocabulaire → Grammaire → Exercices → WordBook → Terminé!</li>
+          <li>Chaque leçon = <strong>50 XP</strong> minimum</li>
+        </ol>
+
+        <div class="fg-section-title">✅ Fonctions incluses</div>
+        <ul class="fg-list">
+          <li>Cartes de vocabulaire avec prononciation audio</li>
+          <li>Explication grammaticale claire</li>
+          <li>Quiz (QCM, texte à trous, écoute, expression orale)</li>
+          <li>Barre de progression visuelle</li>
+          <li>XP automatique à la fin</li>
+        </ul>
+
+        <div class="fg-section-title">⚠️ Limitations</div>
+        <ul class="fg-list fg-list-warn">
+          <li>Les leçons sont bloquées: vous devez terminer la précédente</li>
+          <li>Pas de retour en arrière dans le player (progression linéaire)</li>
+          <li>Audio nécessite un navigateur compatible TTS</li>
+        </ul>
+
+        <div class="fg-tip">💡 <strong>Conseil:</strong> Faites au moins 1 leçon par jour pour maintenir votre série!</div>
+      </div>
     </div>
-    <div style="display:flex;gap:8px">
-      <input class="fill-inp" type="text" id="ai-inp" placeholder="Posez votre question..." onkeydown="if(event.key==='Enter')sendAI()"/>
-      <button class="btn btn-p btn-sm" onclick="sendAI()">→</button>
+
+    <!-- Feature 2: WordBook -->
+    <div class="fg-feature">
+      <div class="fg-feature-hdr">
+        <div class="fg-feature-icon" style="background:#2D9CDB">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z"/></svg>
+        </div>
+        <div>
+          <div class="fg-feature-name">WordBook (Cahier de mots)</div>
+          <div class="fg-feature-tag">Mémorisation</div>
+        </div>
+      </div>
+      <div class="fg-feature-body">
+        <div class="fg-section-title">📖 Description</div>
+        <p>Chaque leçon possède son propre WordBook. Il contient tous les mots appris dans la leçon avec prononciation, traduction, exemples et notes.</p>
+
+        <div class="fg-section-title">🎮 Comment utiliser</div>
+        <ol class="fg-steps">
+          <li>Terminez une leçon complètement</li>
+          <li>Le bouton <strong>WordBook</strong> se débloque (📖) dans la liste des leçons</li>
+          <li>Cliquez dessus pour voir tous les mots</li>
+          <li>Utilisez le bouton 🔊 pour entendre chaque mot</li>
+        </ol>
+
+        <div class="fg-section-title">✅ Fonctions incluses</div>
+        <ul class="fg-list">
+          <li>Mot en français + phonétique IPA</li>
+          <li>Traduction en arabe et anglais</li>
+          <li>Exemple de phrase authentique</li>
+          <li>Note grammaticale ou culturelle</li>
+          <li>Lecture audio de chaque mot</li>
+        </ul>
+
+        <div class="fg-section-title">⚠️ Limitations</div>
+        <ul class="fg-list fg-list-warn">
+          <li>Accessible seulement après avoir terminé la leçon</li>
+          <li>Pas d'exercices de révision dans le WordBook (pour l'instant)</li>
+        </ul>
+
+        <div class="fg-tip">💡 <strong>Conseil:</strong> Révisez votre WordBook 24h après la leçon pour maximiser la mémorisation!</div>
+      </div>
+    </div>
+
+    <!-- Feature 3: Translator -->
+    <div class="fg-feature">
+      <div class="fg-feature-hdr">
+        <div class="fg-feature-icon" style="background:#27AE60">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M5 8l6 6m-6 0l6-6M19 5h-7m7 0a2 2 0 010 4h-7"/></svg>
+        </div>
+        <div>
+          <div class="fg-feature-name">Traducteur Intelligent</div>
+          <div class="fg-feature-tag">IA • Explication complète</div>
+        </div>
+      </div>
+      <div class="fg-feature-body">
+        <div class="fg-section-title">📖 Description</div>
+        <p>Un traducteur IA avancé qui ne se contente pas de traduire: il explique le mot en détail, montre la conjugaison, donne des exemples et affiche une image pour les noms.</p>
+
+        <div class="fg-section-title">🎮 Comment utiliser</div>
+        <ol class="fg-steps">
+          <li>Cliquez sur <strong>Traducteur</strong> dans la barre de navigation</li>
+          <li>Choisissez la direction: Français→Arabe, Français→Anglais, ou vers Français</li>
+          <li>Tapez votre mot ou phrase</li>
+          <li>Cliquez <strong>"Traduire & Expliquer"</strong></li>
+          <li>Lisez l'explication complète, les exemples, la conjugaison</li>
+        </ol>
+
+        <div class="fg-section-title">✅ Fonctions incluses</div>
+        <ul class="fg-list">
+          <li>Traduction dans la langue de l'utilisateur</li>
+          <li>Prononciation IPA + audio</li>
+          <li>Explication détaillée (usage, contexte, règles)</li>
+          <li>3 exemples de phrases authentiques</li>
+          <li>Tableau de conjugaison (pour les verbes)</li>
+          <li>Image illustrative (pour les noms)</li>
+          <li>Mots rapides pré-définis</li>
+          <li>Sauvegarde dans le WordBook personnel</li>
+        </ul>
+
+        <div class="fg-section-title">⚠️ Limitations</div>
+        <ul class="fg-list fg-list-warn">
+          <li>Nécessite une connexion Internet (IA en temps réel)</li>
+          <li>Peut prendre 2-3 secondes pour l'analyse</li>
+          <li>Les images dépendent du mot (seulement pour les noms concrets)</li>
+        </ul>
+
+        <div class="fg-tip">💡 <strong>Conseil:</strong> Utilisez le traducteur quand vous rencontrez un mot inconnu dans une leçon — il vous donnera beaucoup plus qu'un simple dictionnaire!</div>
+      </div>
+    </div>
+
+    <!-- Feature 4: Progress -->
+    <div class="fg-feature">
+      <div class="fg-feature-hdr">
+        <div class="fg-feature-icon" style="background:#F77F00">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M3 3v18h18M9 17V9m4 8V5m4 12V7"/></svg>
+        </div>
+        <div>
+          <div class="fg-feature-name">Ma Progression</div>
+          <div class="fg-feature-tag">Suivi & Analyse</div>
+        </div>
+      </div>
+      <div class="fg-feature-body">
+        <div class="fg-section-title">📖 Description</div>
+        <p>Tableau de bord complet pour suivre votre avancement: progression globale, stats par niveau, analyse de votre rythme, et certificats obtenus.</p>
+
+        <div class="fg-section-title">🎮 Comment utiliser</div>
+        <ol class="fg-steps">
+          <li>Cliquez sur <strong>Progression</strong> dans la barre de navigation</li>
+          <li>Regardez l'anneau circulaire pour votre % global</li>
+          <li>Consultez les barres par niveau</li>
+          <li>Lisez l'analyse IA de votre rythme</li>
+          <li>Téléchargez vos certificats quand un niveau est complété</li>
+        </ol>
+
+        <div class="fg-section-title">✅ Fonctions incluses</div>
+        <ul class="fg-list">
+          <li>Anneau de progression global (0-100%)</li>
+          <li>Stats: leçons, XP, série, restant</li>
+          <li>Analyse personnalisée (bon rythme / encouragement)</li>
+          <li>Barres de progression par niveau</li>
+          <li>Système de certificats (1 par niveau complété)</li>
+        </ul>
+
+        <div class="fg-section-title">⚠️ Limitations</div>
+        <ul class="fg-list fg-list-warn">
+          <li>Données stockées localement (perdues si cache effacé)</li>
+          <li>Pas de comparaison avec d'autres utilisateurs</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Feature 5: Profile -->
+    <div class="fg-feature">
+      <div class="fg-feature-hdr">
+        <div class="fg-feature-icon" style="background:#6C63FF">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/></svg>
+        </div>
+        <div>
+          <div class="fg-feature-name">Profil</div>
+          <div class="fg-feature-tag">Compte & Statistiques</div>
+        </div>
+      </div>
+      <div class="fg-feature-body">
+        <div class="fg-section-title">📖 Description</div>
+        <p>Votre espace personnel: informations du compte, statistiques détaillées, analyse IA de votre performance, et certificats obtenus.</p>
+
+        <div class="fg-section-title">✅ Fonctions incluses</div>
+        <ul class="fg-list">
+          <li>Avatar initiale + nom + email</li>
+          <li>Date d'inscription et statistiques</li>
+          <li>Moyenne de leçons par jour</li>
+          <li>Analyse IA: "Êtes-vous sur la bonne voie?"</li>
+          <li>Liste des certificats gagnés</li>
+          <li>Modification du nom et mot de passe</li>
+          <li>Déconnexion sécurisée</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Summary table -->
+    <div class="fg-summary">
+      <div class="fg-summary-title">📊 Résumé des fonctionnalités</div>
+      <div class="fg-table">
+        <div class="fg-table-row fg-table-hdr">
+          <span>Fonctionnalité</span><span>Internet?</span><span>Gratuit?</span>
+        </div>
+        <div class="fg-table-row"><span>Leçons (300)</span><span>Non</span><span>✅</span></div>
+        <div class="fg-table-row"><span>WordBook</span><span>Non</span><span>✅</span></div>
+        <div class="fg-table-row"><span>Traducteur IA</span><span>Oui</span><span>✅</span></div>
+        <div class="fg-table-row"><span>Progression</span><span>Non</span><span>✅</span></div>
+        <div class="fg-table-row"><span>Profil</span><span>Non</span><span>✅</span></div>
+        <div class="fg-table-row"><span>Certificats</span><span>Non</span><span>✅</span></div>
+        <div class="fg-table-row"><span>Audio TTS</span><span>Non</span><span>✅</span></div>
+      </div>
+    </div>
+
+  </div>`;
+}
+
+function renderLanguageSetting(){
+  const s=getSession();
+  const cur=s?.settings?.uiLang||'ar';
+  return `
+  <div class="lang-setting">
+    <p>Choisissez la langue des explications et traductions:</p>
+    <div class="lang-opts">
+      <button class="lang-opt ${cur==='ar'?'active':''}" onclick="setUiLang('ar')">🌙 العربية</button>
+      <button class="lang-opt ${cur==='en'?'active':''}" onclick="setUiLang('en')">🇬🇧 English</button>
     </div>
   </div>`;
-  openM('m-ai');
 }
-function askAI(q){ openAI(); setTimeout(()=>{ const inp=$('ai-inp'); if(inp){ inp.value=q; sendAI(); }},200); }
-async function sendAI(){
-  const inp=$('ai-inp'); const msg=(inp?.value||'').trim(); if(!msg) return;
-  if(inp) inp.value='';
-  aiHistory.push({role:'user',content:msg});
-  const msgs=$('ai-msgs');
-  if(msgs){ msgs.innerHTML+=`<div class="ai-msg ai-user">${esc(msg)}</div>`; msgs.innerHTML+=`<div class="ai-msg ai-bot ai-typing">...</div>`; msgs.scrollTop=msgs.scrollHeight; }
-  try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:600,system:'You are an enthusiastic French language tutor. Explain grammar, vocabulary, and usage clearly. Use examples. Be encouraging. Answer in the same language the student writes (French, English, or Arabic). Format nicely with emojis.',messages:aiHistory.slice(-6)})
+
+function setUiLang(lang){
+  const s=getSession();
+  if(!s) return;
+  s.settings=s.settings||{};
+  s.settings.uiLang=lang;
+  saveSession(s);
+  toast(lang==='ar'?'تم تغيير اللغة إلى العربية':'Language set to English','ok');
+  openSettingsSection('language');
+}
+
+function renderNotificationsSetting(){
+  const s=getSession();
+  const on=s?.settings?.notifications!==false;
+  return `
+  <div class="notif-setting">
+    <p>Recevez un rappel quotidien pour étudier:</p>
+    <div class="toggle-row">
+      <span>Rappels quotidiens</span>
+      <button class="toggle-btn ${on?'toggle-on':''}" onclick="toggleNotifications()">
+        <div class="toggle-knob"></div>
+      </button>
+    </div>
+    <p class="notif-note">Les rappels utilisent les notifications du navigateur.</p>
+    <button class="btn btn-p btn-sm" onclick="Notification.requestPermission().then(p=>toast('Statut: '+p,'info'))">Autoriser les notifications</button>
+  </div>`;
+}
+
+function toggleNotifications(){
+  const s=getSession();
+  if(!s) return;
+  s.settings=s.settings||{};
+  s.settings.notifications=!s.settings.notifications;
+  saveSession(s);
+  openSettingsSection('notifications');
+}
+
+function renderGoalSetting(){
+  const s=getSession();
+  const goal=s?.settings?.dailyGoal||10;
+  return `
+  <div class="goal-setting">
+    <p>Combien de minutes par jour voulez-vous étudier?</p>
+    <div class="goal-opts">
+      ${[5,10,15,20,30].map(g=>`<button class="goal-opt ${goal===g?'active':''}" onclick="setDailyGoal(${g})">${g} min</button>`).join('')}
+    </div>
+  </div>`;
+}
+
+function setDailyGoal(min){
+  const s=getSession();
+  if(!s) return;
+  s.settings=s.settings||{};
+  s.settings.dailyGoal=min;
+  saveSession(s);
+  toast(`Objectif: ${min} min/jour`,'ok');
+  openSettingsSection('goal');
+}
+
+function renderAboutPage(){
+  return `
+  <div class="about-page">
+    <div class="about-logo">
+      <svg width="60" height="60" viewBox="0 0 60 60">
+        <defs><linearGradient id="ag" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#D62828"/><stop offset="100%" stop-color="#8B0000"/></linearGradient></defs>
+        <rect width="60" height="60" rx="16" fill="url(#ag)"/>
+        <path d="M18 42 L30 18 L42 42" stroke="white" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="30" cy="12" r="4" fill="white"/>
+      </svg>
+    </div>
+    <div class="about-name">Languway French</div>
+    <div class="about-version">Version 6.0 • 2024</div>
+    <div class="about-desc">Application d'apprentissage du français — 300 leçons, traducteur IA, WordBook, certificats.</div>
+    <div class="about-features-list">
+      <div class="about-feat-row">📚 300 leçons structurées</div>
+      <div class="about-feat-row">📖 WordBook par leçon</div>
+      <div class="about-feat-row">🤖 Traducteur IA avec explication</div>
+      <div class="about-feat-row">🏆 Système de certificats</div>
+      <div class="about-feat-row">🔊 Audio TTS (Text-to-Speech)</div>
+      <div class="about-feat-row">📱 Progressive Web App (PWA)</div>
+      <div class="about-feat-row">🌙 Mode sombre</div>
+    </div>
+    <div class="about-footer">Fait avec ❤️ pour les apprenants du monde arabe</div>
+  </div>`;
+}
+
+// ── Init ──────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded',()=>{
+  speechSynthesis.getVoices();
+  goTo('home');
+
+  // Nav items
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    n.addEventListener('click',()=>{
+      const pg=n.dataset.page;
+      if(pg) goTo(pg);
     });
-    const data=await resp.json();
-    const reply=data.content?.[0]?.text||'Je suis désolé, réessayez.';
-    aiHistory.push({role:'assistant',content:reply});
-    if(msgs){ const typing=msgs.querySelector('.ai-typing'); if(typing) typing.remove(); msgs.innerHTML+=`<div class="ai-msg ai-bot">${esc(reply).replace(/\n/g,'<br>')}</div>`; msgs.scrollTop=msgs.scrollHeight; }
-  }catch(e){
-    if(msgs){ const typing=msgs.querySelector('.ai-typing'); if(typing) typing.remove(); msgs.innerHTML+=`<div class="ai-msg ai-bot">Erreur de connexion. Réessayez.</div>`; }
-  }
-}
+  });
 
-// ── PWA ─────────────────────────────────────────────────────────────
-let _installPrompt=null;
-window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); _installPrompt=e; window._installPrompt=e; const btn=$('install-btn'); if(btn) btn.style.display='flex'; });
-function doInstall(){ if(_installPrompt){ _installPrompt.prompt(); _installPrompt.userChoice.then(r=>{ if(r.outcome==='accepted') toast('App installée! 🎉','ok'); _installPrompt=null; }); } }
+  // Auth modal buttons
+  $('btn-login-top')?.addEventListener('click',()=>openM('m-auth'));
+  $('tab-login')?.addEventListener('click',()=>switchAuthTab('login'));
+  $('tab-register')?.addEventListener('click',()=>switchAuthTab('register'));
+  $('btn-do-login')?.addEventListener('click',doLogin);
+  $('btn-do-register')?.addEventListener('click',doRegister);
 
-// ── INIT ────────────────────────────────────────────────────────────
-function initApp(){
-  const user=authGetCurrent();
-  $('app').style.display='flex';
-  $('splash').style.opacity='0';
-  setTimeout(()=>{ $('splash').style.display='none'; },600);
-  if(user){
-    const s=user.settings||{};
-    if(s.darkMode){ darkMode=true; document.body.classList.add('dark'); }
-    if(s.fontSize) document.documentElement.style.fontSize=s.fontSize+'px';
-  }
-  updateChip();
-  if(!user){ showAuth(); return; }
-  nav('home');
-  document.querySelectorAll('.fab').forEach(f=>f.style.display='flex');
-}
-window.addEventListener('load',()=>{
-  setTimeout(()=>{
-    initApp();
-    if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
-  },2600);
+  // Translator nav
+  $('nav-translator')?.addEventListener('click',()=>openTranslator(''));
+
+  // Update streak
+  updateStreak();
 });
+
+function updateStreak(){
+  const s=getSession();
+  if(!s) return;
+  const today=new Date().toDateString();
+  const last=s.lastStudy?new Date(s.lastStudy).toDateString():null;
+  if(last===today) return;
+  const yesterday=new Date(Date.now()-86400000).toDateString();
+  if(last===yesterday){
+    s.streak=(s.streak||0)+1;
+  } else if(last && last!==today){
+    s.streak=0;
+  }
+  saveSession(s);
+}

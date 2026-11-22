@@ -3,262 +3,236 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<meta name="theme-color" content="#B91C1C"/>
-<meta name="description" content="Languway French — Apprenez le français du niveau Pré-A1 jusqu'à C2"/>
-<meta name="mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
-<meta name="apple-mobile-web-app-title" content="Languway French"/>
-<title>Languway French</title>
+<title>Languway French — Learn French Your Way</title>
+<meta name="description" content="Apprenez le français avec 300 leçons structurées, traducteur IA, WordBook par leçon et certificats."/>
+<meta name="theme-color" content="#D62828"/>
 <link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="icon-192.png"/>
+<meta property="og:title" content="Languway French"/>
+<meta property="og:description" content="300 leçons · Traducteur IA · WordBook · Certificats"/>
+<meta property="og:image" content="og-image.png"/>
 <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
 
 <!-- SPLASH -->
 <div id="splash">
-  <div class="splash-logo">🇫🇷</div>
-  <div class="splash-brand">Languway <em>French</em></div>
-  <div class="splash-tag">Apprenez le français</div>
-  <div class="splash-bar"><div class="splash-fill"></div></div>
+  <div class="splash-logo">
+    <svg width="80" height="80" viewBox="0 0 80 80">
+      <defs><linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#D62828"/><stop offset="100%" stop-color="#8B0000"/></linearGradient></defs>
+      <rect width="80" height="80" rx="22" fill="url(#sg)"/>
+      <path d="M24 56 L40 24 L56 56" stroke="white" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="40" cy="17" r="5" fill="white"/>
+      <path d="M34 44 L46 44" stroke="white" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+  </div>
+  <div class="splash-name">Languway French</div>
+  <div class="splash-sub">Your way to a bigger world 🌍</div>
+  <div class="splash-bar"><div class="splash-bar-fill"></div></div>
 </div>
 
-<!-- OVERLAY -->
-<div id="overlay" onclick="closeSB()"></div>
-
-<!-- SIDEBAR -->
-<div id="sidebar">
-  <div class="sb-head">
-    <div class="sb-logo">Languway <em>French</em></div>
-    <div class="sb-tagline">Pre-A1 → C2 · 30 Niveaux</div>
-    <div class="sb-user" id="sb-user-info">
-      <div class="sb-avatar" id="sb-av">?</div>
-      <div>
-        <div class="sb-uname" id="sb-uname">Visiteur</div>
-        <div class="sb-uxp" id="sb-uxp">0 XP · 0 niveaux</div>
-      </div>
-    </div>
-  </div>
-  <div class="sb-nav">
-    <div class="sb-sec">Principal</div>
-    <div class="sb-item" data-p="home" onclick="nav('home')"><span class="sb-item-ic">🏠</span>Accueil</div>
-    <div class="sb-item" data-p="path" onclick="nav('path')"><span class="sb-item-ic">🗺️</span>Mon Parcours</div>
-    <div class="sb-item" data-p="wordbook" onclick="nav('wordbook')"><span class="sb-item-ic">📖</span>Vocabulaire</div>
-    <div class="sb-item" data-p="training" onclick="nav('training')"><span class="sb-item-ic">🎯</span>Entraînement</div>
-    <div class="sb-sec">Contenu</div>
-    <div class="sb-item" data-p="situations" onclick="nav('situations')"><span class="sb-item-ic">💬</span>Situations Réelles</div>
-    <div class="sb-item" data-p="stories" onclick="nav('stories')"><span class="sb-item-ic">📚</span>Histoires</div>
-    <div class="sb-item" data-p="explore" onclick="nav('explore')"><span class="sb-item-ic">🔍</span>Explorer</div>
-    <div class="sb-item" onclick="openTranslator()"><span class="sb-item-ic">🔤</span>Traducteur</div>
-    <div class="sb-item" onclick="openAI()"><span class="sb-item-ic">🤖</span>Tuteur IA</div>
-    <div class="sb-sec">Compte</div>
-    <div class="sb-item" data-p="progress" onclick="nav('progress')"><span class="sb-item-ic">📊</span>Mes Statistiques</div>
-    <div class="sb-item" data-p="settings" onclick="nav('settings')"><span class="sb-item-ic">⚙️</span>Paramètres</div>
-    <div class="sb-item" data-p="share" onclick="nav('share')"><span class="sb-item-ic">📲</span>Partager</div>
-    <div class="sb-item" data-p="about" onclick="nav('about')"><span class="sb-item-ic">ℹ️</span>À Propos</div>
-  </div>
-  <div class="sb-foot">
-    <button class="btn btn-g btn-sm" style="width:100%;color:#DC2626" onclick="doLogout()">🚪 Se déconnecter</button>
-  </div>
-</div>
-
-<!-- MAIN APP -->
+<!-- APP -->
 <div id="app">
 
-  <!-- TOP BAR -->
-  <div class="topbar">
-    <button class="tb-ic" onclick="openSB()">☰</button>
-    <div class="tb-logo">Languway <em>French</em></div>
-    <div class="tb-chip" id="lvl-chip" onclick="nav('progress')">0 Niveaux</div>
-    <button class="tb-ic" onclick="startPlacement()" title="Test de placement">🎯</button>
-  </div>
-
-  <!-- HOME PAGE -->
-  <div id="home-page" class="page active">
-    <div style="text-align:center;padding:60px 20px;color:var(--txt3)">Chargement...</div>
-  </div>
-
-  <!-- PATH PAGE -->
-  <div id="path-page" class="page"></div>
-
-  <!-- WORDBOOK PAGE -->
-  <div id="wordbook-page" class="page"></div>
-
-  <!-- TRAINING PAGE -->
-  <div id="training-page" class="page"></div>
-
-  <!-- SITUATIONS PAGE -->
-  <div id="situations-page" class="page"></div>
-
-  <!-- STORIES PAGE -->
-  <div id="stories-page" class="page"></div>
-
-  <!-- EXPLORE PAGE -->
-  <div id="explore-page" class="page"></div>
-
-  <!-- PROGRESS PAGE -->
-  <div id="progress-page" class="page"></div>
-
-  <!-- SETTINGS PAGE -->
-  <div id="settings-page" class="page"></div>
-
-  <!-- SHARE PAGE -->
-  <div id="share-page" class="page"></div>
-
-  <!-- ABOUT PAGE -->
-  <div id="about-page" class="page"></div>
-
-  <!-- AUTH PAGE -->
-  <div id="auth-page" class="page">
-    <div class="auth-box">
-      <div class="auth-logo">
-        <div class="auth-logo-ic">🇫🇷</div>
-        <h1>Languway <em>French</em></h1>
-        <p>Apprenez le français — Pre-A1 → C2</p>
+  <!-- SIDEBAR (desktop) -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <svg width="32" height="32" viewBox="0 0 80 80"><defs><linearGradient id="sg2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#D62828"/><stop offset="100%" stop-color="#8B0000"/></linearGradient></defs><rect width="80" height="80" rx="22" fill="url(#sg2)"/><path d="M24 56 L40 24 L56 56" stroke="white" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="40" cy="17" r="5" fill="white"/><path d="M34 44 L46 44" stroke="white" stroke-width="3" stroke-linecap="round"/></svg>
+      Languway
+    </div>
+    <div class="sidebar-nav">
+      <div class="sidebar-nav-item active" data-page="home" onclick="goTo('home')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Accueil
       </div>
-      <div class="auth-tabs">
-        <button class="auth-tab-btn active" data-tab="login" onclick="switchAuthTab('login')">Se connecter</button>
-        <button class="auth-tab-btn" data-tab="register" onclick="switchAuthTab('register')">S'inscrire</button>
+      <div class="sidebar-nav-item" data-page="progress" onclick="goTo('progress')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M9 17V9m4 8V5m4 12V7"/></svg>
+        Progression
       </div>
-
-      <!-- LOGIN FORM -->
-      <div id="auth-login-form" class="auth-login-form" style="display:flex">
-        <div class="auth-field">
-          <label>Adresse e-mail</label>
-          <input type="email" id="li-email" placeholder="votre@email.com"/>
-        </div>
-        <div class="auth-field">
-          <label>Mot de passe</label>
-          <input type="password" id="li-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/>
-        </div>
-        <button class="btn btn-p" style="width:100%;margin-top:4px" onclick="doLogin()">Se connecter →</button>
-        <div class="auth-sep">— ou —</div>
-        <button class="btn btn-o" style="width:100%" onclick="switchAuthTab('register')">Créer un compte</button>
+      <div class="sidebar-nav-item" data-page="lesson-map" onclick="goTo('lesson-map',{})">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3z"/><path d="M5 13.18v4L12 21l7-3.82v-4"/></svg>
+        Leçons
       </div>
-
-      <!-- REGISTER FORM -->
-      <div id="auth-reg-form" class="auth-reg-form" style="display:none">
-        <div class="auth-field">
-          <label>Prénom / Nom</label>
-          <input type="text" id="rg-name" placeholder="Votre nom"/>
-        </div>
-        <div class="auth-field">
-          <label>Adresse e-mail</label>
-          <input type="email" id="rg-email" placeholder="votre@email.com"/>
-        </div>
-        <div class="auth-field">
-          <label>Mot de passe (6 caractères min.)</label>
-          <input type="password" id="rg-pass" placeholder="••••••••"/>
-        </div>
-        <div class="auth-field">
-          <label>Mon objectif d'apprentissage</label>
-          <select id="rg-goal">
-            <option value="travel">🌍 Voyages</option>
-            <option value="work">💼 Travail / Carrière</option>
-            <option value="culture">🎭 Culture & Art</option>
-            <option value="family">👨‍👩‍👧 Famille</option>
-            <option value="business">📈 Affaires</option>
-            <option value="general">📚 Apprentissage général</option>
-          </select>
-        </div>
-        <button class="btn btn-p" style="width:100%;margin-top:4px" onclick="doRegister()">Créer mon compte →</button>
-        <div class="auth-sep">— ou —</div>
-        <button class="btn btn-o" style="width:100%" onclick="switchAuthTab('login')">J'ai déjà un compte</button>
+      <div class="sidebar-nav-item" id="nav-translator" onclick="openTranslator('')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6m-6 0l6-6M19 5h-7m7 0a2 2 0 010 4h-7"/></svg>
+        Traducteur
+      </div>
+      <div class="sidebar-nav-item" data-page="profile" onclick="goTo('profile')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Profil
+      </div>
+      <div class="sidebar-nav-item" data-page="settings" onclick="goTo('settings')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        Paramètres
       </div>
     </div>
-  </div>
-
-  <!-- BOTTOM NAV -->
-  <nav class="bnav">
-    <button class="bnav-btn active" data-p="home" onclick="nav('home')">
-      <span class="nb-ic">🏠</span><span>Accueil</span>
-    </button>
-    <button class="bnav-btn" data-p="path" onclick="nav('path')">
-      <span class="nb-ic">🗺️</span><span>Parcours</span>
-    </button>
-    <button class="bnav-btn" data-p="wordbook" onclick="nav('wordbook')">
-      <span class="nb-ic">📖</span><span>Mots</span>
-    </button>
-    <button class="bnav-btn" data-p="training" onclick="nav('training')">
-      <span class="nb-ic">🎯</span><span>Entraîn.</span>
-    </button>
-    <button class="bnav-btn" data-p="settings" onclick="nav('settings')">
-      <span class="nb-ic">⚙️</span><span>Réglages</span>
-    </button>
+    <div class="sidebar-bottom">
+      <button class="btn btn-p btn-sm" id="btn-login-top" style="width:100%">Connexion</button>
+    </div>
   </nav>
 
-  <!-- FABS -->
-  <div class="fabs" style="display:none">
-    <button class="fab" onclick="openAI()" title="Tuteur IA">🤖</button>
-    <button class="fab" onclick="openTranslator()" title="Traducteur" style="background:var(--bg2);color:var(--cr);box-shadow:0 4px 16px rgba(0,0,0,.12);border:1px solid var(--bdr)">🔤</button>
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <!-- HOME PAGE -->
+    <div id="page-home" class="page">
+      <div class="home-topbar">
+        <div class="topbar-logo">
+          <svg width="28" height="28" viewBox="0 0 80 80"><defs><linearGradient id="sg3" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#D62828"/><stop offset="100%" stop-color="#8B0000"/></linearGradient></defs><rect width="80" height="80" rx="22" fill="url(#sg3)"/><path d="M24 56 L40 24 L56 56" stroke="white" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="40" cy="17" r="5" fill="white"/><path d="M34 44 L46 44" stroke="white" stroke-width="3" stroke-linecap="round"/></svg>
+          Languway French
+        </div>
+        <div class="topbar-actions">
+          <button class="topbar-btn" id="btn-login-top" onclick="openM('m-auth')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="home-hero">
+        <img src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&q=80" class="home-hero-img" alt="Paris" loading="eager"/>
+        <div class="home-hero-overlay"></div>
+        <div class="home-hero-content">
+          <div class="home-hero-title">Bonjour! <span>Learn French</span><br/>Your Way to a Bigger World</div>
+          <div class="home-hero-sub">300 leçons · Traducteur IA · WordBook</div>
+        </div>
+      </div>
+
+      <div id="home-stats"></div>
+
+      <div id="home-next-lesson"></div>
+
+      <div class="section-hdr">
+        <div class="section-title">Learning Path</div>
+        <div class="section-link" onclick="goTo('lesson-map',{})">Voir tout →</div>
+      </div>
+      <div id="home-learning-path"></div>
+
+      <div style="height:16px"></div>
+    </div>
+
+    <!-- PROGRESS PAGE -->
+    <div id="page-progress" class="page"></div>
+
+    <!-- LESSON MAP PAGE -->
+    <div id="page-lesson-map" class="page"></div>
+
+    <!-- PROFILE PAGE -->
+    <div id="page-profile" class="page"></div>
+
+    <!-- SETTINGS PAGE -->
+    <div id="page-settings" class="page"></div>
+
+  </main>
+
+  <!-- BOTTOM NAV (mobile) -->
+  <nav class="bottom-nav">
+    <div class="nav-item active" data-page="home">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Home
+    </div>
+    <div class="nav-item" data-page="progress">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M9 17V9m4 8V5m4 12V7"/></svg>
+      Progress
+    </div>
+    <div class="nav-item" data-page="lesson-map">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3z"/><path d="M5 13.18v4L12 21l7-3.82v-4"/></svg>
+      Lessons
+    </div>
+    <div class="nav-item" id="nav-translator">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6m-6 0l6-6M19 5h-7m7 0a2 2 0 010 4h-7"/></svg>
+      Translate
+    </div>
+    <div class="nav-item" data-page="profile">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Profile
+    </div>
+  </nav>
+
+</div>
+
+<!-- ══════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════ -->
+
+<!-- AUTH -->
+<div id="m-auth" class="modal-overlay" onclick="if(event.target===this)closeM('m-auth')">
+  <div class="modal-box">
+    <div class="modal-drag-bar"></div>
+    <div class="modal-hdr">
+      <div class="modal-hdr-title">🇫🇷 Rejoignez Languway</div>
+      <button class="modal-close-btn" onclick="closeM('m-auth')">✕</button>
+    </div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Connexion</div>
+      <div class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Inscription</div>
+    </div>
+    <div id="form-login" class="auth-form">
+      <div><label class="field-label">Email</label><input id="auth-email" type="email" class="field-input" placeholder="vous@email.com"/></div>
+      <div><label class="field-label">Mot de passe</label><input id="auth-pass" type="password" class="field-input" placeholder="••••••"/></div>
+      <button class="btn btn-p" id="btn-do-login" onclick="doLogin()">Se connecter</button>
+    </div>
+    <div id="form-register" class="auth-form" style="display:none">
+      <div><label class="field-label">Prénom</label><input id="reg-name" class="field-input" placeholder="Marie"/></div>
+      <div><label class="field-label">Email</label><input id="reg-email" type="email" class="field-input" placeholder="vous@email.com"/></div>
+      <div><label class="field-label">Mot de passe</label><input id="reg-pass" type="password" class="field-input" placeholder="Min. 6 caractères"/></div>
+      <button class="btn btn-p" id="btn-do-register" onclick="doRegister()">Créer mon compte</button>
+    </div>
   </div>
+</div>
 
-</div><!-- /app -->
+<!-- LESSON PLAYER -->
+<div id="m-lesson" class="modal-overlay" style="align-items:center">
+  <div class="modal-box" style="border-radius:20px;max-height:92vh">
+    <div class="modal-drag-bar"></div>
+    <div class="modal-hdr">
+      <button class="modal-close-btn" onclick="closeM('m-lesson')">✕</button>
+      <div class="modal-hdr-title">Leçon en cours</div>
+      <div style="width:32px"></div>
+    </div>
+  </div>
+</div>
 
-<!-- MODALS -->
-
-<!-- LESSON MODAL -->
-<div class="modal" id="m-lesson">
-  <div class="modal-overlay" onclick="closeM('m-lesson')"></div>
+<!-- WORDBOOK -->
+<div id="m-wordbook" class="modal-overlay" onclick="if(event.target===this)closeM('m-wordbook')">
   <div class="modal-box"></div>
 </div>
 
-<!-- PLACEMENT MODAL -->
-<div class="modal" id="m-placement">
-  <div class="modal-overlay"></div>
+<!-- TRANSLATOR -->
+<div id="m-trans" class="modal-overlay" onclick="if(event.target===this)closeM('m-trans')">
   <div class="modal-box"></div>
 </div>
 
-<!-- COMPLETION MODAL -->
-<div class="modal" id="m-complete">
-  <div class="modal-overlay" onclick="closeM('m-complete')"></div>
+<!-- SETTINGS DETAIL -->
+<div id="m-settings-detail" class="modal-overlay" onclick="if(event.target===this)closeM('m-settings-detail')">
   <div class="modal-box"></div>
 </div>
 
-<!-- SITUATION MODAL -->
-<div class="modal" id="m-sit">
-  <div class="modal-overlay" onclick="closeM('m-sit')"></div>
+<!-- EDIT PROFILE -->
+<div id="m-editprofile" class="modal-overlay" onclick="if(event.target===this)closeM('m-editprofile')">
   <div class="modal-box"></div>
-</div>
-
-<!-- FLASHCARD MODAL -->
-<div class="modal" id="m-flash">
-  <div class="modal-overlay" onclick="closeM('m-flash')"></div>
-  <div class="modal-box"></div>
-</div>
-
-<!-- TRANSLATOR MODAL -->
-<div class="modal" id="m-trans">
-  <div class="modal-overlay" onclick="closeM('m-trans')"></div>
-  <div class="modal-box"></div>
-</div>
-
-<!-- AI TUTOR MODAL -->
-<div class="modal" id="m-ai">
-  <div class="modal-overlay" onclick="closeM('m-ai')"></div>
-  <div class="modal-box" style="max-height:85vh"></div>
 </div>
 
 <!-- SCRIPTS -->
 <script src="auth.js"></script>
-<script src="data-levels.js"></script>
+<script src="data.js"></script>
+<script src="lessons.js"></script>
+<script src="translator.js"></script>
 <script src="app.js"></script>
 <script>
-// Update sidebar user info after load
-document.addEventListener('DOMContentLoaded', function(){
-  function updateSB(){
-    const u = authGetCurrent();
-    if(!u) return;
-    const av = document.getElementById('sb-av');
-    const un = document.getElementById('sb-uname');
-    const ux = document.getElementById('sb-uxp');
-    if(av) av.textContent = u.avatar || u.name.charAt(0).toUpperCase();
-    if(un) un.textContent = u.name;
-    if(ux) ux.textContent = (u.xp||0) + ' XP · ' + (u.completedLevels?.length||0) + ' niveaux';
+  // Splash
+  window.addEventListener('load',()=>{
+    setTimeout(()=>{
+      document.getElementById('splash')?.classList.add('hidden');
+    },2200);
+  });
+
+  // Service Worker
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
   }
-  setTimeout(updateSB, 3000);
-  window._sbUpdate = updateSB;
-});
+
+  // Translator nav (mobile)
+  document.getElementById('nav-translator')?.addEventListener('click',()=>openTranslator(''));
 </script>
 </body>
 </html>
