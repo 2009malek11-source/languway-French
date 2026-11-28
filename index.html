@@ -3,236 +3,301 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>Languway French — Learn French Your Way</title>
-<meta name="description" content="Apprenez le français avec 300 leçons structurées, traducteur IA, WordBook par leçon et certificats."/>
+<title>Languway French — Apprenez le français du niveau zéro au C1</title>
+<meta name="description" content="Apprenez le français avec 300 leçons structurées, test de placement, traducteur IA, WordBook par leçon, exercices complets et certificats officiels."/>
 <meta name="theme-color" content="#D62828"/>
+<meta property="og:title" content="Languway French"/>
+<meta property="og:description" content="De zéro au C1 — 300 leçons · Test de placement · Traducteur IA · Certificats"/>
+<meta property="og:type" content="website"/>
 <link rel="manifest" href="manifest.json"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<meta property="og:title" content="Languway French"/>
-<meta property="og:description" content="300 leçons · Traducteur IA · WordBook · Certificats"/>
-<meta property="og:image" content="og-image.png"/>
 <link rel="stylesheet" href="style.css"/>
+<!-- JSON-LD SEO -->
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"EducationalApplication","name":"Languway French",
+"description":"Application complète d'apprentissage du français — Pre-A1 à C1",
+"educationalLevel":"Beginner to Advanced","inLanguage":"fr","offers":{"@type":"Offer","price":"0"}}
+</script>
 </head>
 <body>
 
-<!-- SPLASH -->
+<!-- ═══════════════════════════════════
+     SPLASH
+═══════════════════════════════════ -->
 <div id="splash">
-  <div class="splash-logo">
-    <svg width="80" height="80" viewBox="0 0 80 80">
-      <defs><linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#D62828"/><stop offset="100%" stop-color="#8B0000"/></linearGradient></defs>
-      <rect width="80" height="80" rx="22" fill="url(#sg)"/>
-      <path d="M24 56 L40 24 L56 56" stroke="white" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-      <circle cx="40" cy="17" r="5" fill="white"/>
-      <path d="M34 44 L46 44" stroke="white" stroke-width="3" stroke-linecap="round"/>
-    </svg>
+  <div class="spl-orbit">
+    <div class="spl-orbit-ring"></div>
+    <div class="spl-orbit-core">
+      <!-- Languway Logo SVG -->
+      <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+        <defs>
+          <linearGradient id="lg1" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#FF5555"/>
+            <stop offset="100%" stop-color="#8B0000"/>
+          </linearGradient>
+        </defs>
+        <!-- Shield / Badge shape -->
+        <path d="M30 4 L52 14 L52 32 C52 44 42 54 30 58 C18 54 8 44 8 32 L8 14 Z"
+              fill="url(#lg1)" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+        <!-- Letter A stylized -->
+        <path d="M18 44 L30 16 L42 44" stroke="white" stroke-width="3.5"
+              fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M22 36 L38 36" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- Flag de France petite -->
+        <rect x="27" y="9" width="2.5" height="8" fill="#002395" rx="0.5"/>
+        <rect x="29.5" y="9" width="2.5" height="8" fill="white" rx="0.5"/>
+        <rect x="32" y="9" width="2.5" height="8" fill="#ED2939" rx="0.5"/>
+      </svg>
+    </div>
   </div>
-  <div class="splash-name">Languway French</div>
-  <div class="splash-sub">Your way to a bigger world 🌍</div>
-  <div class="splash-bar"><div class="splash-bar-fill"></div></div>
+  <div class="spl-brand">LANGUWAY</div>
+  <div class="spl-sub">LEARN FRENCH</div>
+  <!-- Decorative SVG lines -->
+  <svg class="spl-deco" width="200" height="20" viewBox="0 0 200 20">
+    <line x1="0" y1="10" x2="70" y2="10" stroke="#D62828" stroke-width="1" opacity="0.4"/>
+    <circle cx="85" cy="10" r="3" fill="#D62828" opacity="0.6"/>
+    <circle cx="100" cy="10" r="4" fill="#D62828"/>
+    <circle cx="115" cy="10" r="3" fill="#D62828" opacity="0.6"/>
+    <line x1="130" y1="10" x2="200" y2="10" stroke="#D62828" stroke-width="1" opacity="0.4"/>
+  </svg>
+  <div class="spl-tagline">DE ZÉRO AU C1 · COMPLET · GRATUIT</div>
+  <div class="spl-bar"><div class="spl-bar-fill"></div></div>
+  <div class="spl-skip" onclick="document.getElementById('splash').classList.add('gone');document.getElementById('app').classList.add('ready')">
+    Passer →
+  </div>
 </div>
 
-<!-- APP -->
+<!-- ═══════════════════════════════════
+     APP
+═══════════════════════════════════ -->
 <div id="app">
 
-  <!-- SIDEBAR (desktop) -->
+  <!-- SIDEBAR DESKTOP -->
   <nav class="sidebar">
-    <div class="sidebar-logo">
-      <svg width="32" height="32" viewBox="0 0 80 80"><defs><linearGradient id="sg2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#D62828"/><stop offset="100%" stop-color="#8B0000"/></linearGradient></defs><rect width="80" height="80" rx="22" fill="url(#sg2)"/><path d="M24 56 L40 24 L56 56" stroke="white" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="40" cy="17" r="5" fill="white"/><path d="M34 44 L46 44" stroke="white" stroke-width="3" stroke-linecap="round"/></svg>
-      Languway
+    <div class="sidebar-logo" onclick="goTo('home')">
+      <svg width="34" height="34" viewBox="0 0 60 60" fill="none">
+        <path d="M30 2 L54 13 L54 33 C54 46 43 56 30 60 C17 56 6 46 6 33 L6 13 Z" fill="#D62828"/>
+        <path d="M17 46 L30 14 L43 46" stroke="white" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M21 37 L39 37" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      <span>Languway</span>
     </div>
-    <div class="sidebar-nav">
-      <div class="sidebar-nav-item active" data-page="home" onclick="goTo('home')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        Accueil
-      </div>
-      <div class="sidebar-nav-item" data-page="progress" onclick="goTo('progress')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M9 17V9m4 8V5m4 12V7"/></svg>
-        Progression
-      </div>
-      <div class="sidebar-nav-item" data-page="lesson-map" onclick="goTo('lesson-map',{})">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3z"/><path d="M5 13.18v4L12 21l7-3.82v-4"/></svg>
-        Leçons
-      </div>
-      <div class="sidebar-nav-item" id="nav-translator" onclick="openTranslator('')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6m-6 0l6-6M19 5h-7m7 0a2 2 0 010 4h-7"/></svg>
-        Traducteur
-      </div>
-      <div class="sidebar-nav-item" data-page="profile" onclick="goTo('profile')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        Profil
-      </div>
-      <div class="sidebar-nav-item" data-page="settings" onclick="goTo('settings')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
-        Paramètres
-      </div>
-    </div>
+    <div id="sidebar-nav"></div>
     <div class="sidebar-bottom">
-      <button class="btn btn-p btn-sm" id="btn-login-top" style="width:100%">Connexion</button>
+      <button class="btn btn-p btn-sm" id="sidebar-auth-btn" style="width:100%" onclick="openModal('m-auth')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Connexion
+      </button>
     </div>
   </nav>
 
-  <!-- MAIN CONTENT -->
-  <main class="main-content">
+  <!-- MAIN -->
+  <main class="main-wrap">
 
-    <!-- HOME PAGE -->
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <div class="topbar-logo" onclick="goTo('home')">
+        <svg class="topbar-mark" viewBox="0 0 60 60" fill="none">
+          <path d="M30 2 L54 13 L54 33 C54 46 43 56 30 60 C17 56 6 46 6 33 L6 13 Z" fill="#D62828"/>
+          <path d="M17 46 L30 14 L43 46" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M21 37 L39 37" stroke="white" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <span class="topbar-name">Languway <span>French</span></span>
+      </div>
+      <div class="topbar-actions">
+        <button class="topbar-btn" id="topbar-auth-btn" onclick="openModal('m-auth')" title="Connexion">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ─── PAGES ─── -->
+
+    <!-- HOME -->
     <div id="page-home" class="page">
-      <div class="home-topbar">
-        <div class="topbar-logo">
-          <svg width="28" height="28" viewBox="0 0 80 80"><defs><linearGradient id="sg3" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#D62828"/><stop offset="100%" stop-color="#8B0000"/></linearGradient></defs><rect width="80" height="80" rx="22" fill="url(#sg3)"/><path d="M24 56 L40 24 L56 56" stroke="white" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="40" cy="17" r="5" fill="white"/><path d="M34 44 L46 44" stroke="white" stroke-width="3" stroke-linecap="round"/></svg>
-          Languway French
-        </div>
-        <div class="topbar-actions">
-          <button class="topbar-btn" id="btn-login-top" onclick="openM('m-auth')">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          </button>
-        </div>
-      </div>
-
       <div class="home-hero">
-        <img src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&q=80" class="home-hero-img" alt="Paris" loading="eager"/>
-        <div class="home-hero-overlay"></div>
-        <div class="home-hero-content">
-          <div class="home-hero-title">Bonjour! <span>Learn French</span><br/>Your Way to a Bigger World</div>
-          <div class="home-hero-sub">300 leçons · Traducteur IA · WordBook</div>
+        <img src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=900&q=80"
+             class="home-hero-img" alt="Paris" loading="eager"/>
+        <div class="home-hero-ov"></div>
+        <div class="home-hero-txt">
+          <div class="home-hero-title">Bonjour! <strong>Learn French</strong><br/>Your Way to a Bigger World</div>
+          <div class="home-hero-sub">Pre-A1 → C1 · 300 leçons · Traducteur IA · Test de placement</div>
         </div>
       </div>
-
-      <div id="home-stats"></div>
-
+      <div id="home-stats" class="stats-strip"></div>
       <div id="home-next-lesson"></div>
-
-      <div class="section-hdr">
-        <div class="section-title">Learning Path</div>
-        <div class="section-link" onclick="goTo('lesson-map',{})">Voir tout →</div>
+      <!-- Test placement banner (guests) -->
+      <div id="home-placement-banner"></div>
+      <div class="sec-hdr">
+        <div class="sec-title">Learning Path</div>
+        <div class="sec-link" onclick="goTo('lesson-map',{})">Voir tout →</div>
       </div>
-      <div id="home-learning-path"></div>
-
+      <div id="home-lp" class="lp-scroll"></div>
       <div style="height:16px"></div>
     </div>
 
-    <!-- PROGRESS PAGE -->
+    <!-- PROGRESS -->
     <div id="page-progress" class="page"></div>
 
-    <!-- LESSON MAP PAGE -->
+    <!-- LESSON MAP -->
     <div id="page-lesson-map" class="page"></div>
 
-    <!-- PROFILE PAGE -->
+    <!-- PROFILE -->
     <div id="page-profile" class="page"></div>
 
-    <!-- SETTINGS PAGE -->
+    <!-- SETTINGS -->
     <div id="page-settings" class="page"></div>
 
   </main>
 
-  <!-- BOTTOM NAV (mobile) -->
-  <nav class="bottom-nav">
-    <div class="nav-item active" data-page="home">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      Home
-    </div>
-    <div class="nav-item" data-page="progress">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M9 17V9m4 8V5m4 12V7"/></svg>
-      Progress
-    </div>
-    <div class="nav-item" data-page="lesson-map">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3z"/><path d="M5 13.18v4L12 21l7-3.82v-4"/></svg>
-      Lessons
-    </div>
-    <div class="nav-item" id="nav-translator">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6m-6 0l6-6M19 5h-7m7 0a2 2 0 010 4h-7"/></svg>
-      Translate
-    </div>
-    <div class="nav-item" data-page="profile">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      Profile
-    </div>
-  </nav>
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav" id="bottom-nav"></nav>
 
-</div>
+</div><!-- #app -->
 
-<!-- ══════════════════════════════════════════
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- ═══════════════════════════════════
      MODALS
-══════════════════════════════════════════ -->
+═══════════════════════════════════ -->
 
 <!-- AUTH -->
-<div id="m-auth" class="modal-overlay" onclick="if(event.target===this)closeM('m-auth')">
+<div id="m-auth" class="modal-ov" onclick="if(event.target===this)closeModal('m-auth')">
   <div class="modal-box">
-    <div class="modal-drag-bar"></div>
-    <div class="modal-hdr">
-      <div class="modal-hdr-title">🇫🇷 Rejoignez Languway</div>
-      <button class="modal-close-btn" onclick="closeM('m-auth')">✕</button>
+    <div class="drag-bar"></div>
+    <div class="mhdr">
+      <div class="mhdr-title">
+        <svg width="20" height="20" viewBox="0 0 60 60" fill="none">
+          <path d="M30 2 L54 13 L54 33 C54 46 43 56 30 60 C17 56 6 46 6 33 L6 13 Z" fill="#D62828"/>
+          <path d="M17 46 L30 14 L43 46" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Rejoignez Languway French
+      </div>
+      <button class="mclose" onclick="closeModal('m-auth')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
     </div>
     <div class="auth-tabs">
-      <div class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Connexion</div>
-      <div class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Inscription</div>
+      <div class="auth-tab active" id="auth-tab-login" onclick="switchAuthTab('login')">Connexion</div>
+      <div class="auth-tab" id="auth-tab-register" onclick="switchAuthTab('register')">Inscription</div>
     </div>
-    <div id="form-login" class="auth-form">
-      <div><label class="field-label">Email</label><input id="auth-email" type="email" class="field-input" placeholder="vous@email.com"/></div>
-      <div><label class="field-label">Mot de passe</label><input id="auth-pass" type="password" class="field-input" placeholder="••••••"/></div>
-      <button class="btn btn-p" id="btn-do-login" onclick="doLogin()">Se connecter</button>
+    <!-- Login -->
+    <div id="auth-form-login" class="auth-form">
+      <div class="field-wrap">
+        <label class="field-label">Email</label>
+        <input id="auth-email" type="email" class="field-inp" placeholder="vous@email.com" autocomplete="email"/>
+      </div>
+      <div class="field-wrap">
+        <label class="field-label">Mot de passe</label>
+        <input id="auth-pass" type="password" class="field-inp" placeholder="••••••" autocomplete="current-password"/>
+      </div>
+      <button class="btn btn-p btn-w" onclick="doLogin()">Se connecter</button>
+      <div class="auth-or">— ou —</div>
+      <button class="btn btn-o btn-w" onclick="switchAuthTab('register')">Créer un compte gratuit</button>
     </div>
-    <div id="form-register" class="auth-form" style="display:none">
-      <div><label class="field-label">Prénom</label><input id="reg-name" class="field-input" placeholder="Marie"/></div>
-      <div><label class="field-label">Email</label><input id="reg-email" type="email" class="field-input" placeholder="vous@email.com"/></div>
-      <div><label class="field-label">Mot de passe</label><input id="reg-pass" type="password" class="field-input" placeholder="Min. 6 caractères"/></div>
-      <button class="btn btn-p" id="btn-do-register" onclick="doRegister()">Créer mon compte</button>
+    <!-- Register -->
+    <div id="auth-form-register" class="auth-form" style="display:none">
+      <div class="field-wrap">
+        <label class="field-label">Prénom</label>
+        <input id="reg-name" class="field-inp" placeholder="Marie" autocomplete="given-name"/>
+      </div>
+      <div class="field-wrap">
+        <label class="field-label">Email</label>
+        <input id="reg-email" type="email" class="field-inp" placeholder="vous@email.com" autocomplete="email"/>
+      </div>
+      <div class="field-wrap">
+        <label class="field-label">Mot de passe (min. 6 caractères)</label>
+        <input id="reg-pass" type="password" class="field-inp" placeholder="••••••" autocomplete="new-password"/>
+      </div>
+      <button class="btn btn-p btn-w" onclick="doRegister()">Créer mon compte</button>
     </div>
+  </div>
+</div>
+
+<!-- PLACEMENT TEST -->
+<div id="m-placement" class="modal-ov" onclick="if(event.target===this)closeModal('m-placement')">
+  <div class="modal-box" style="max-height:95vh">
+    <div class="drag-bar"></div>
+    <div class="mhdr">
+      <div class="mhdr-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Test de Placement
+      </div>
+      <button class="mclose" onclick="closeModal('m-placement')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="placement-content" class="pt-wrap"></div>
   </div>
 </div>
 
 <!-- LESSON PLAYER -->
-<div id="m-lesson" class="modal-overlay" style="align-items:center">
-  <div class="modal-box" style="border-radius:20px;max-height:92vh">
-    <div class="modal-drag-bar"></div>
-    <div class="modal-hdr">
-      <button class="modal-close-btn" onclick="closeM('m-lesson')">✕</button>
-      <div class="modal-hdr-title">Leçon en cours</div>
+<div id="m-lesson" class="modal-ov modal-center" onclick="if(event.target===this&&confirm('Quitter la leçon?'))closeModal('m-lesson')">
+  <div class="modal-box" style="border-radius:20px;max-height:95vh">
+    <div class="mhdr">
+      <button class="mclose" onclick="if(confirm('Quitter la leçon?'))closeModal('m-lesson')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+      <div class="mhdr-title" id="lesson-modal-title">Leçon</div>
       <div style="width:32px"></div>
     </div>
+    <div id="lesson-content"></div>
   </div>
 </div>
 
 <!-- WORDBOOK -->
-<div id="m-wordbook" class="modal-overlay" onclick="if(event.target===this)closeM('m-wordbook')">
-  <div class="modal-box"></div>
+<div id="m-wordbook" class="modal-ov" onclick="if(event.target===this)closeModal('m-wordbook')">
+  <div class="modal-box" style="max-height:95vh">
+    <div id="wordbook-content"></div>
+  </div>
 </div>
 
 <!-- TRANSLATOR -->
-<div id="m-trans" class="modal-overlay" onclick="if(event.target===this)closeM('m-trans')">
-  <div class="modal-box"></div>
+<div id="m-trans" class="modal-ov" onclick="if(event.target===this)closeModal('m-trans')">
+  <div class="modal-box" style="max-height:95vh">
+    <div id="trans-content"></div>
+  </div>
 </div>
 
 <!-- SETTINGS DETAIL -->
-<div id="m-settings-detail" class="modal-overlay" onclick="if(event.target===this)closeM('m-settings-detail')">
-  <div class="modal-box"></div>
+<div id="m-settings-det" class="modal-ov" onclick="if(event.target===this)closeModal('m-settings-det')">
+  <div class="modal-box" style="max-height:95vh">
+    <div id="settings-det-content"></div>
+  </div>
 </div>
 
 <!-- EDIT PROFILE -->
-<div id="m-editprofile" class="modal-overlay" onclick="if(event.target===this)closeM('m-editprofile')">
-  <div class="modal-box"></div>
+<div id="m-editprofile" class="modal-ov" onclick="if(event.target===this)closeModal('m-editprofile')">
+  <div class="modal-box">
+    <div id="editprofile-content"></div>
+  </div>
 </div>
 
-<!-- SCRIPTS -->
-<script src="auth.js"></script>
+<!-- EXAM MODAL -->
+<div id="m-exam" class="modal-ov modal-center" onclick="if(event.target===this&&confirm('Quitter l\'examen?'))closeModal('m-exam')">
+  <div class="modal-box" style="border-radius:20px;max-height:95vh">
+    <div id="exam-content"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════
+     SCRIPTS (ordre important)
+═══════════════════════════════════ -->
 <script src="data.js"></script>
-<script src="lessons.js"></script>
+<script src="auth.js"></script>
 <script src="translator.js"></script>
 <script src="app.js"></script>
 <script>
-  // Splash
-  window.addEventListener('load',()=>{
-    setTimeout(()=>{
-      document.getElementById('splash')?.classList.add('hidden');
-    },2200);
-  });
-
   // Service Worker
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').catch(()=>{});
   }
-
-  // Translator nav (mobile)
-  document.getElementById('nav-translator')?.addEventListener('click',()=>openTranslator(''));
+  // Preload speech voices
+  if(window.speechSynthesis){
+    speechSynthesis.getVoices();
+    speechSynthesis.addEventListener('voiceschanged',()=>{});
+  }
 </script>
 </body>
 </html>
